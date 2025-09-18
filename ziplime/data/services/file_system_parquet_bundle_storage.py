@@ -92,12 +92,6 @@ class FileSystemParquetBundleStorage(BundleStorage):
                     field not in ('sid', 'date')
                 )
             else:
-                # nth_row_start = 0
-                # nth_row_end = 0
-                # if start_auction_delta is not None:
-                #     nth_row_start = start_auction_delta / data_bundle.original_frequency
-                # if end_auction_delta is not None:
-                #     nth_row_end = end_auction_delta / data_bundle.original_frequency
                 if start_auction_delta is not None:
                     pl_parquet = pl_parquet.filter(
                         pl.col("date") >= (
@@ -133,7 +127,7 @@ class FileSystemParquetBundleStorage(BundleStorage):
                         pl.col(field).last() for field in pl_parquet.collect_schema().names() if
                         field not in ('sid', 'date')
                     )
-        return pl_parquet.collect()
+        return pl_parquet.sort(["sid", "date"]).collect()
 
     @classmethod
     async def from_json(cls, data: dict[str, Any]) -> Self:

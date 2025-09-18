@@ -153,7 +153,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                     first_traded=currency.first_traded,
                     end_date=currency.end_date,
                     asset_name=currency.asset_name,
-                    auto_close_date=currency.auto_close_date
+                    auto_close_date=currency.auto_close_date,
+                    mic=currency.mic
                 )
                 session.add(asset_db)
                 await session.commit()
@@ -191,7 +192,6 @@ class SqlAlchemyAssetRepository(AssetRepository):
 
     async def save_symbol_universe(self, symbol_universe: SymbolsUniverse):
         async with self.session_maker() as session:
-
             symbol_universe_model = SymbolsUniverseModel(symbol=symbol_universe.symbol,
                                                          universe_type=symbol_universe.universe_type,
                                                          name=symbol_universe.name,
@@ -234,7 +234,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 first_traded=equity.first_traded,
                 end_date=equity.end_date,
                 asset_name=equity.asset_name,
-                auto_close_date=equity.auto_close_date
+                auto_close_date=equity.auto_close_date,
+                mic=equity.mic
             )
             assets_db.append(asset_db)
             for symbol_mapping in equity.symbol_mapping.values():
@@ -350,6 +351,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
             return currencies[0]
         return None
 
+    @aiocache.cached(cache=Cache.MEMORY)
     async def get_currencies_by_symbols(self, symbols: list[str], exchange_name: str) -> list[Currency]:
         async with self.session_maker() as session:
             q_currency_symbol_mapping = select(CurrencySymbolMappingModel).where(
@@ -378,7 +380,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                         start_date=currency_mapping.start_date
                     )
                     for currency_mapping in asset.currency_symbol_mappings
-                }
+                },
+                mic=asset.mic
             ) for asset in assets]
 
     async def get_commodity_by_symbol(self, symbol: str) -> Commodity | None:
@@ -417,7 +420,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                         start_date=equity_mapping.start_date
                     )
                     for equity_mapping in asset.equity_symbol_mappings
-                }
+                },
+                mic=asset.mic
             ) for asset in assets]
 
     async def get_equities_by_symbols(self, symbols: list[str]) -> list[Equity]:
@@ -449,7 +453,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                         start_date=equity_mapping.start_date
                     )
                     for equity_mapping in asset.equity_symbol_mappings
-                }
+                },
+                mic=asset.mic
             ) for asset in assets]
 
     async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:

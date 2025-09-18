@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 import asyncio
-from exchange_calendars import get_calendar, ExchangeCalendar
+from exchange_calendars import ExchangeCalendar
+from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
 from ziplime.assets.entities.currency import Currency
@@ -12,7 +13,6 @@ from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.models.exchange_info import ExchangeInfo
-from ziplime.assets.models.symbols_universe_asset import SymbolsUniverseAssetModel
 from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.assets.services.asset_service import AssetService
@@ -25,8 +25,8 @@ from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRe
 from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemParquetBundleStorage
 
 
-def get_asset_service(clear_asset_db: bool = False) -> AssetService:
-    db_path = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())
+def get_asset_service(db_path: str = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute()),
+                      clear_asset_db: bool = False) -> AssetService:
     if clear_asset_db and os.path.exists(db_path):
         os.remove(db_path)
     db_url = f"sqlite+aiosqlite:///{db_path}"
@@ -34,6 +34,56 @@ def get_asset_service(clear_asset_db: bool = False) -> AssetService:
     adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
     asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
     return asset_service
+
+async def ingest_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
+    asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
+    asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
+
+    usd_currency = Currency(
+        asset_name="USD",
+        symbol_mapping={
+            "LIME": CurrencySymbolMapping(
+                symbol="USD",
+                exchange_name="LIME",
+                start_date=asset_start_date,
+                end_date=asset_end_date
+            )
+        },
+        sid=None,
+        start_date=asset_start_date,
+        end_date=asset_end_date,
+        auto_close_date=asset_end_date,
+        first_traded=asset_start_date,
+        mic=None,
+    )
+    assets = await asset_data_source.get_assets()
+    equities = [
+        Equity(
+            asset_name=asset["symbol"],
+            symbol_mapping={
+                "LIME": EquitySymbolMapping(
+                    symbol=asset["symbol"],
+                    exchange_name="LIME",
+                    start_date=asset_start_date,
+                    end_date=asset_end_date,
+                    company_symbol="",
+                    share_class_symbol=""
+                )
+            },
+            sid=None,
+            start_date=asset_start_date,
+            end_date=asset_end_date,
+            auto_close_date=asset_end_date,
+            first_traded=asset_start_date,
+            mic=asset["mic"]
+        ) for asset in assets.iter_rows(named=True)
+
+    ]
+
+    await asset_service.save_exchanges(
+        exchanges=[ExchangeInfo(exchange="LIME", canonical_name="LIME", country_code="US")])
+    await asset_service.save_currencies([usd_currency])
+    await asset_service.save_equities(equities)
 
 
 async def ingest_default_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
@@ -54,7 +104,8 @@ async def ingest_default_assets(asset_service: AssetService, asset_data_source: 
         start_date=asset_start_date,
         end_date=asset_end_date,
         auto_close_date=asset_end_date,
-        first_traded=asset_start_date
+        first_traded=asset_start_date,
+        mic=None
     )
 
     equities = [
@@ -74,7 +125,8 @@ async def ingest_default_assets(asset_service: AssetService, asset_data_source: 
             start_date=asset_start_date,
             end_date=asset_end_date,
             auto_close_date=asset_end_date,
-            first_traded=asset_start_date
+            first_traded=asset_start_date,
+            mic=None
         ) for symbol in ALL_US_STOCK_SYMBOLS
 
     ]
@@ -164,31 +216,31 @@ async def _ingest_custom_data(
     )
 
 
-def ingest_market_data(start_date: datetime.datetime, end_date: datetime.datetime,
-                       symbols: list[str],
-                       trading_calendar: str,
-                       bundle_name: str,
-                       data_bundle_source: DataBundleSource,
-                       asset_service: AssetService,
-                       data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
+async def ingest_market_data(start_date: datetime.datetime, end_date: datetime.datetime,
+                             symbols: list[str],
+                             trading_calendar: str,
+                             bundle_name: str,
+                             data_bundle_source: DataBundleSource,
+                             asset_service: AssetService,
+                             data_frequency: datetime.timedelta = datetime.timedelta(minutes=1)):
     calendar = get_calendar(trading_calendar)
-    asyncio.run(
-        _ingest_market_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
-                            trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
-                            asset_service=asset_service))
+    await _ingest_market_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name,
+                                frequency=data_frequency,
+                                trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
+                                asset_service=asset_service)
 
 
-def ingest_custom_data(start_date: datetime.datetime, end_date: datetime.datetime,
-                       symbols: list[str],
-                       trading_calendar: str,
-                       bundle_name: str,
-                       data_bundle_source: DataBundleSource,
-                       asset_service: AssetService,
-                       data_frequency: datetime.timedelta | Period = datetime.timedelta(minutes=1),
-                       data_frequency_use_window_end: bool = True):
+async def ingest_custom_data(start_date: datetime.datetime, end_date: datetime.datetime,
+                             symbols: list[str],
+                             trading_calendar: str,
+                             bundle_name: str,
+                             data_bundle_source: DataBundleSource,
+                             asset_service: AssetService,
+                             data_frequency: datetime.timedelta | Period = datetime.timedelta(minutes=1),
+                             data_frequency_use_window_end: bool = True):
     calendar = get_calendar(trading_calendar)
-    asyncio.run(
-        _ingest_custom_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name, frequency=data_frequency,
-                            data_frequency_use_window_end=data_frequency_use_window_end,
-                            trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
-                            asset_service=asset_service))
+    await _ingest_custom_data(start_date=start_date, end_date=end_date, bundle_name=bundle_name,
+                              frequency=data_frequency,
+                              data_frequency_use_window_end=data_frequency_use_window_end,
+                              trading_calendar=calendar, symbols=symbols, data_bundle_source=data_bundle_source,
+                              asset_service=asset_service)

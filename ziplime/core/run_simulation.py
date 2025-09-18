@@ -1,16 +1,14 @@
 import datetime
 from pathlib import Path
 
-from exchange_calendars import get_calendar
+from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
 from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
-from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.data_source import DataSource
-from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
 from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, \
     PerContract, DEFAULT_PER_CONTRACT_COST, DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
 from ziplime.finance.constants import FUTURE_EXCHANGE_FEES_BY_SYMBOL
@@ -39,6 +37,7 @@ async def _run_simulation(
         config_file: str | None = None,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
+        asset_service: AssetService =None
 ):
     # benchmark_spec = BenchmarkSpec(
     #     benchmark_returns=None,
@@ -82,10 +81,11 @@ async def _run_simulation(
             clock=clock
         )
 
-    db_url = f"sqlite+aiosqlite:///{str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())}"
-    assets_repository = SqlAlchemyAssetRepository(db_url=db_url, future_chain_predicates=CHAIN_PREDICATES)
-    adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=db_url)
-    asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
+    if asset_service is None:
+        db_url= f"sqlite+aiosqlite:///{str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())}"
+        assets_repository = SqlAlchemyAssetRepository(db_url=assets_db_url, future_chain_predicates=CHAIN_PREDICATES)
+        adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=assets_db_url)
+        asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
 
     return await run_algorithm(
         algorithm=algo,
@@ -104,28 +104,30 @@ async def _run_simulation(
 
 
 async def run_simulation(start_date: datetime.datetime,
-                   end_date: datetime.datetime,
-                   emission_rate: datetime.timedelta,
-                   trading_calendar: str,
-                   algorithm_file: str,
-                   total_cash: float,
-                   market_data_source: DataSource,
-                   custom_data_sources: list[DataSource],
-                   stop_on_error: bool,
-                   config_file: str | None = None,
-                   exchange: Exchange | None = None,
-                   benchmark_asset_symbol: str | None = None,
-                   benchmark_returns: pl.Series | None = None,
-                   ):
+                         end_date: datetime.datetime,
+                         emission_rate: datetime.timedelta,
+                         trading_calendar: str,
+                         algorithm_file: str,
+                         total_cash: float,
+                         market_data_source: DataSource,
+                         custom_data_sources: list[DataSource],
+                         stop_on_error: bool,
+                         config_file: str | None = None,
+                         exchange: Exchange | None = None,
+                         benchmark_asset_symbol: str | None = None,
+                         benchmark_returns: pl.Series | None = None,
+                         asset_service:AssetService | None = None
+                         ):
     return await _run_simulation(start_date=start_date, end_date=end_date, trading_calendar=trading_calendar,
-                                       cash_balance=total_cash,
-                                       algorithm_file=algorithm_file,
-                                       config_file=config_file,
-                                       market_data_source=market_data_source,
-                                       custom_data_sources=custom_data_sources,
-                                       exchange=exchange,
-                                       emission_rate=emission_rate,
-                                       benchmark_asset_symbol=benchmark_asset_symbol,
-                                       benchmark_returns=benchmark_returns,
-                                       stop_on_error=stop_on_error
-                                       )
+                                 cash_balance=total_cash,
+                                 algorithm_file=algorithm_file,
+                                 config_file=config_file,
+                                 market_data_source=market_data_source,
+                                 custom_data_sources=custom_data_sources,
+                                 exchange=exchange,
+                                 emission_rate=emission_rate,
+                                 benchmark_asset_symbol=benchmark_asset_symbol,
+                                 benchmark_returns=benchmark_returns,
+                                 stop_on_error=stop_on_error,
+                                 asset_service=asset_service
+                                 )

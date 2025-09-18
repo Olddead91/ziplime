@@ -1,4 +1,5 @@
 import datetime
+import time
 from typing import Any
 
 import polars as pl
@@ -151,6 +152,9 @@ class BundleService:
                 )
                 # Concatenate with the original DataFrame
                 data = pl.concat([data, new_rows_df], how="diagonal")
+            missing_symbols = set(unique_symbols) - set(symbol_to_sid)
+            if missing_symbols:
+                raise ValueError(f"Symbols are missing in asset database: {missing_symbols}")
 
             data = data.with_columns(
                 pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
@@ -176,6 +180,7 @@ class BundleService:
         """Ingest data for a given bundle.        """
         self._logger.info(f"Ingesting market data bundle: name={name}, date_start={date_start}, date_end={date_end}, "
                           f"symbols={symbols}, frequency={frequency}")
+        start_duration = time.time()
         if date_start < trading_calendar.first_session.replace(tzinfo=trading_calendar.tz):
             raise ValueError(
                 f"Date start must be after first session of trading calendar. "
@@ -197,7 +202,7 @@ class BundleService:
 
         if data.is_empty():
             self._logger.warning(
-                "No data for symbols={symbols}, frequency={frequency}, date_from={date_from}, date_end={date_end} found. Skipping ingestion.")
+                f"No data for symbols={symbols}, frequency={frequency}, date_from={date_start}, date_end={date_end} found. Skipping ingestion.")
             return
 
         required_columns = [
@@ -246,6 +251,9 @@ class BundleService:
 
                     # Concatenate with the original DataFrame
                     data = pl.concat([data, new_rows_df], how="diagonal")
+            missing_symbols = set(symbols) - set(symbol_to_sid)
+            if missing_symbols:
+                raise ValueError(f"Symbols are missing in asset database: {missing_symbols}")
 
             data = data.with_columns(
                 pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")
@@ -268,8 +276,9 @@ class BundleService:
                                  )
         await self._bundle_registry.register_bundle(data_bundle=data_bundle, bundle_storage=bundle_storage)
         await bundle_storage.store_bundle(data_bundle=data_bundle)
-
-        self._logger.info(f"Finished ingesting market data bundle_name={name}, bundle_version={bundle_version}")
+        duration = time.time() - start_duration
+        self._logger.info(f"Finished ingesting market data bundle_name={name}, bundle_version={bundle_version}."
+                          f"Total duration: {duration:.2f} seconds", duration=duration)
 
     async def load_bundle(self, bundle_name: str, bundle_version: str | None,
                           symbols: list[str] | None = None,
@@ -280,23 +289,19 @@ class BundleService:
                           end_auction_delta: datetime.timedelta = None,
                           aggregations: list[pl.Expr] = None
                           ) -> DataBundle:
+        self._logger.info(f"Loading bundle: bundle_name={bundle_name}, bundle_version={bundle_version}")
+
+        bundle_metadata_start = time.time()
+
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
-
+        self._logger.info(f"Loaded bundle metadata in {time.time() - bundle_metadata_start} seconds")
         bundle_storage_class: BundleStorage = load_class(
             module_name='.'.join(bundle_metadata["bundle_storage_class"].split(".")[:-1]),
             class_name=bundle_metadata["bundle_storage_class"].split(".")[-1])
-        # asset_repository_class: AssetRepository = load_class(
-        #     module_name='.'.join(bundle_metadata["asset_repository_class"].split(".")[:-1]),
-        #     class_name=bundle_metadata["asset_repository_class"].split(".")[-1])
-        # adjustment_repository_class: AdjustmentRepository = load_class(
-        #     module_name='.'.join(bundle_metadata["adjustment_repository_class"].split(".")[:-1]),
-        #     class_name=bundle_metadata["adjustment_repository_class"].split(".")[-1])
 
         bundle_storage = await bundle_storage_class.from_json(bundle_metadata["bundle_storage_data"])
 
-        # asset_repository = asset_repository_class.from_json(bundle_metadata["asset_repository_data"])
-        # adjustment_repository = adjustment_repository_class.from_json(bundle_metadata["adjustment_repository_data"])
         bundle_start_date = datetime.datetime.strptime(bundle_metadata["start_date"], "%Y-%m-%dT%H:%M:%SZ")
         trading_calendar = get_calendar(bundle_metadata["trading_calendar_name"],
                                         start=bundle_start_date - datetime.timedelta(days=30))
@@ -338,6 +343,8 @@ class BundleService:
                                  version=bundle_metadata["version"],
                                  data_type=data_type
                                  )
+        bundle_data_load_start = time.time()
+
         data = await bundle_storage.load_data_bundle(data_bundle=data_bundle,
                                                      symbols=symbols,
                                                      start_date=start_date,
@@ -347,16 +354,11 @@ class BundleService:
                                                      end_auction_delta=end_auction_delta,
                                                      aggregations=aggregations
                                                      )
+        load_duration = time.time() - bundle_data_load_start
+        self._logger.info(f"Loaded data bundle in {load_duration:.2f} seconds",
+                          duration=load_duration)
         data_bundle.data = data
         return data_bundle
-        # data_portal = DataPortal(
-        #     data_bundle=data_bundle,
-        #     historical_data_reader=data_bundle.historical_data_reader,
-        #     fundamental_data_reader=data_bundle.fundamental_data_reader,
-        #     future_minute_reader=data_bundle.historical_data_reader,
-        #     future_daily_reader=data_bundle.historical_data_reader,
-        # )
-        # return data_portal
 
     async def clean(self, bundle_name: str, before: datetime.datetime = None, after: datetime.datetime = None,
                     keep_last: bool = None):
@@ -393,48 +395,3 @@ class BundleService:
 
         for bundle in await self._bundle_registry.list_bundles():
             self._delete_bundle(bundle)
-
-        # try:
-        #     all_runs = sorted(
-        #         filter(
-        #             complement(pth.hidden),
-        #             os.listdir(pth.data_path([name])),
-        #         ),
-        #         key=from_bundle_ingest_dirname,
-        #     )
-        # except OSError as e:
-        #     if e.errno != errno.ENOENT:
-        #         raise
-        #     raise UnknownBundle(name)
-        #
-        # if before is after is keep_last is None:
-        #     raise BadClean(before, after, keep_last)
-        # if (before is not None or after is not None) and keep_last is not None:
-        #     raise BadClean(before, after, keep_last)
-        #
-        # if keep_last is None:
-        #
-        #     def should_clean(name):
-        #         dt = from_bundle_ingest_dirname(name)
-        #         return (before is not None and dt < before) or (
-        #                 after is not None and dt > after
-        #         )
-        #
-        # elif keep_last >= 0:
-        #     last_n_dts = set(take(keep_last, reversed(all_runs)))
-        #
-        #     def should_clean(name):
-        #         return name not in last_n_dts
-        #
-        # else:
-        #     raise BadClean(before, after, keep_last)
-        #
-        # cleaned = set()
-        # for run in all_runs:
-        #     if should_clean(run):
-        #         log.info("Cleaning %s.", run)
-        #         path = pth.data_path([name, run])
-        #         shutil.rmtree(path)
-        #         cleaned.add(path)
-        #
-        # return cleaned

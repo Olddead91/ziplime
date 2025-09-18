@@ -29,6 +29,8 @@ class BenchmarkReturnsAndVolatility:
         )
         daily_returns = daily_returns.fill_nan(0.0)
         daily_returns_series = daily_returns.select("pct_change")
+        if len(daily_returns_series) == 0:
+            raise ValueError(f"No daily returns for benchmark. Please check if you properly loaded data for symbol {benchmark_source.benchmark_asset.get_symbol_by_exchange(exchange_name=None)} in memory.")
         self._daily_returns = daily_returns_array = daily_returns_series
         self._daily_cumulative_returns = np.cumprod(1 + daily_returns_array["pct_change"]) - 1
         self._daily_annual_volatility = (daily_returns_series.with_columns(
@@ -85,7 +87,6 @@ class BenchmarkReturnsAndVolatility:
 
     def end_of_session(self, packet: dict[str, Any], ledger: Ledger, session: datetime.datetime, session_ix: int,
                        exchanges: dict[str, Exchange]):
-        #print(session_ix)
         r = self._daily_cumulative_returns[session_ix]
         if np.isnan(r):
             r = None

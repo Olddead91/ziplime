@@ -1,8 +1,8 @@
 """migration
 
-Revision ID: 3055001d8d17
+Revision ID: 498bbf0b3be2
 Revises: 
-Create Date: 2025-08-12 10:34:58.267664
+Create Date: 2025-09-15 10:09:29.906049
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '3055001d8d17'
+revision = '498bbf0b3be2'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -90,6 +90,7 @@ def upgrade():
     )
     op.create_table('commodities',
     sa.Column('sid', sa.Integer(), nullable=False),
+    sa.Column('mic', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
@@ -100,6 +101,7 @@ def upgrade():
     )
     op.create_table('currencies',
     sa.Column('sid', sa.Integer(), nullable=False),
+    sa.Column('mic', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
@@ -110,6 +112,7 @@ def upgrade():
     )
     op.create_table('equities',
     sa.Column('sid', sa.Integer(), nullable=False),
+    sa.Column('mic', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
@@ -187,6 +190,7 @@ def upgrade():
     sa.Column('tick_size', sa.Float(), nullable=False),
     sa.Column('exchange', sa.String(), nullable=False),
     sa.Column('sid', sa.Integer(), nullable=False),
+    sa.Column('mic', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),

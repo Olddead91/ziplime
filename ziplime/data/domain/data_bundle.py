@@ -1,5 +1,5 @@
 import datetime
-from functools import reduce
+from functools import reduce, lru_cache
 from operator import mul
 from typing import Any
 
@@ -26,7 +26,9 @@ class DataBundle(DataSource):
                  frequency: datetime.timedelta | Period,
                  original_frequency: datetime.timedelta | Period,
                  data_type: DataType,
-                 timestamp: datetime.datetime, data: pl.DataFrame = None):
+                 timestamp: datetime.datetime,
+                 data: pl.DataFrame = None,
+                 ):
         super().__init__(name=name,
                          start_date=start_date,
                          end_date=end_date,
@@ -46,6 +48,14 @@ class DataBundle(DataSource):
 
     def get_dataframe(self) -> pl.DataFrame:
         return self.data
+
+    @lru_cache
+    def get_dataframe_with_columns(self, columns: frozenset[str]) -> pl.DataFrame:
+        return self.data.select(pl.col(col) for col in columns)
+
+    @lru_cache
+    def get_dataframe_by_sid_and_columns(self, sid: str, columns: frozenset[str]) -> pl.DataFrame:
+        return self.data.select(pl.col(col) for col in columns).filter(pl.col("sid").is_in(sid))
 
     def get_data_by_date(self, fields: frozenset[str],
                          from_date: datetime.datetime,

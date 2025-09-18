@@ -782,10 +782,15 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             )
         else:
             # last_price = self.current_data.current([asset], fields={"price"})["price"][0]
-            last_price = self.exchanges[exchange_name].current(frozenset({asset}),
+            last_price_data = self.exchanges[exchange_name].current(frozenset({asset}),
                                                                dt=self.simulation_dt,
-                                                               fields=frozenset({"price"}))["price"][0]
-
+                                                               fields=frozenset({"price"}))["price"]
+            if len(last_price_data) == 0:
+            # if last_price is None:
+                raise CannotOrderDelistedAsset(
+                    msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
+                )
+            last_price = last_price_data[0]
             if last_price is None:
                 raise CannotOrderDelistedAsset(
                     msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."

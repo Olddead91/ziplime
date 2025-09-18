@@ -12,6 +12,7 @@ class AssetModel(BaseModel):
     __abstract__ = True
 
     sid: Mapped[AssetRouterFKPK]
+    mic: Mapped[str | None]
     # asset_router = relationship(AssetRouter)
     asset_name: Mapped[str]
     start_date: Mapped[datetime.date]

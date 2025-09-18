@@ -9,6 +9,7 @@ from exchange_calendars import ExchangeCalendar
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.futures_contract import FuturesContract
+from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 
 from ziplime.domain.position import Position
@@ -242,7 +243,7 @@ class SimulationExchange(Exchange):
     def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
-                          frequency: datetime.timedelta,
+                          frequency: datetime.timedelta | Period,
                           assets: frozenset[Asset],
                           include_end_date: bool,
                           ) -> pl.DataFrame:

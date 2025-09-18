@@ -28,11 +28,18 @@ class YahooFinanceAssetDataSource(AssetDataSource):
         assets = yf.Tickers(' '.join(symbols))
         return assets
 
-    async def search_assets(self, query:str, **kwargs) -> pl.DataFrame:
+    async def search_assets(self, query: str, **kwargs) -> pl.DataFrame:
         assets = yf.Lookup(query=query).all
         return assets
 
     async def get_constituents(self, index: str) -> pl.DataFrame:
-        assets = self._limex_client.constituents(index)
+        index = "SPY"
+        ticker = yf.Ticker(index)
+        funds_data = ticker.funds_data
+        try:
+            holdings = funds_data.equity_holdings
+        except Exception as e:
+            holdings = pl.DataFrame()
+
         return assets
 
