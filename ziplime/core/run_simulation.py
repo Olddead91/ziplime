@@ -82,7 +82,7 @@ async def _run_simulation(
         )
 
     if asset_service is None:
-        db_url= f"sqlite+aiosqlite:///{str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())}"
+        assets_db_url= f"sqlite+aiosqlite:///{str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute())}"
         assets_repository = SqlAlchemyAssetRepository(db_url=assets_db_url, future_chain_predicates=CHAIN_PREDICATES)
         adjustments_repository = SqlAlchemyAdjustmentRepository(db_url=assets_db_url)
         asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)

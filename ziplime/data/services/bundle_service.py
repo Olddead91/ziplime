@@ -295,6 +295,11 @@ class BundleService:
 
         bundle_metadata = await self._bundle_registry.load_bundle_metadata(bundle_name=bundle_name,
                                                                            bundle_version=bundle_version)
+        if bundle_metadata is None:
+            if bundle_version is None:
+                raise ValueError(f"Bundle {bundle_name} not found.")
+            else:
+                raise ValueError(f"Bundle {bundle_name} with version {bundle_version} not found.")
         self._logger.info(f"Loaded bundle metadata in {time.time() - bundle_metadata_start} seconds")
         bundle_storage_class: BundleStorage = load_class(
             module_name='.'.join(bundle_metadata["bundle_storage_class"].split(".")[:-1]),

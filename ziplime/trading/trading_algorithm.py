@@ -795,7 +795,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                 raise CannotOrderDelistedAsset(
                     msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
                 )
-
         if tolerant_equals(last_price, 0):
             self._logger.debug(f"Price of 0 for {asset}; can't infer value")
             # Don't place any order

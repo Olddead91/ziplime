@@ -1,12 +1,14 @@
 # Release Notes
 
+### Version 1.10.16
+- Raise proper exception when data bundle is not found
+
 ### Version 1.9.18
 - Add asset mic in database
 - Add default assets database file
 - Update examples
 - Add cache of currencies query
 - Allow calendar dates older than 2005
-
 
 ### Version 1.8.21
 - Use scan_parquet to load bundle data partially
