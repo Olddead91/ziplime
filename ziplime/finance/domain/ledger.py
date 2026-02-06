@@ -223,13 +223,17 @@ class Ledger:
         self.position_tracker.execute_transaction(transaction)
 
         # we only ever want the dict form from now on
-        transaction_dict = transaction.to_dict()
+        # transaction_dict = transaction.to_dict()
         try:
+            # self._processed_transactions[transaction.dt].append(
+            #     transaction_dict,
+            # )
             self._processed_transactions[transaction.dt].append(
-                transaction_dict,
+                transaction,
             )
         except KeyError:
-            self._processed_transactions[transaction.dt] = [transaction_dict]
+            # self._processed_transactions[transaction.dt] = [transaction_dict]
+            self._processed_transactions[transaction.dt] = [transaction]
 
     def process_splits(self, splits):
         """Processes a list of splits by modifying any positions as needed.
@@ -373,9 +377,9 @@ class Ledger:
         """
         if dt is None:
             # orders by id is already flattened
-            return [o.to_dict() for o in self._orders_by_id.values()]
+            return [o for o in self._orders_by_id.values()]
 
-        return [o.to_dict() for o in self._orders_by_modified.get(dt, {}).values()]
+        return [o for o in self._orders_by_modified.get(dt, {}).values()]
 
     @property
     def positions(self):

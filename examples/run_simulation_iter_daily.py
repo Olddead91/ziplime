@@ -14,7 +14,7 @@ from pathlib import Path
 import pytz
 
 from ziplime.core.ingest_data import get_asset_service
-from ziplime.core.run_simulation import run_simulation
+from ziplime.core.run_simulation import run_simulation_iter
 from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE
 
 logger = structlog.get_logger(__name__)
@@ -62,44 +62,31 @@ async def _run_simulation():
     )
 
     # run daily simulation
-    result = await run_simulation(
-        start_date=start_date,
-        end_date=end_date,
-        trading_calendar="NYSE",
-        algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
-        total_cash=100000.0,
-        market_data_source=market_data_bundle,
-        custom_data_sources=custom_data_sources,
-        config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),
-        emission_rate=datetime.timedelta(days=1),
-        benchmark_asset_symbol="AAPL",
-        benchmark_returns=None,
-        stop_on_error=False,
-        asset_service=asset_service,
-        equity_commission=equity_commission
-    )
-
-    if result.errors:
-        logger.error(result.errors)
-    print(result.perf.head(n=10).to_markdown())
-
-    cash_flow = {"date": [], "cash_change": [], "cash_left": []}
-
+    async for status in run_simulation_iter(
+            start_date=start_date,
+            end_date=end_date,
+            trading_calendar="NYSE",
+            algorithm_file=str(Path("algorithms/test_algo/test_algo.py").absolute()),
+            total_cash=100000.0,
+            market_data_source=market_data_bundle,
+            custom_data_sources=custom_data_sources,
+            config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),
+            emission_rate=datetime.timedelta(days=1),
+            benchmark_asset_symbol="AAPL",
+            benchmark_returns=None,
+            stop_on_error=True,
+            asset_service=asset_service,
+            equity_commission=equity_commission
+    ):
+        print(status)
+        if status.errors:
+            logger.error(status.errors)
+        if status.result:
+            logger.info("Algorithm finished")
+        # print(status.perf.head(n=10).to_markdown())
 
     # Get cash from algo
-    start_cash = sum(exchange.get_start_cash_balance() for exchange in result.trading_algorithm.exchanges.values())
-    logger.info(f"Starting_cash: {start_cash}")
 
-    for transaction_freq in result.perf.transactions:
-        for transaction in transaction_freq:
-            print(transaction)
-            start_cash -=  transaction.total_price()
-            cash_flow["date"].append(transaction.dt)
-            cash_flow["cash_change"].append(-transaction.total_price())
-            cash_flow["cash_left"].append(start_cash)
-
-    cash_flow_df = pl.DataFrame(data=cash_flow)
-    print(cash_flow)
 
 if __name__ == "__main__":
     configure_logging(level=logging.INFO, file_name="mylog.log")

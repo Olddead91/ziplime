@@ -38,5 +38,7 @@ async def handle_data(context, data):
     num_assets = len(context.assets)
     target_percent = 1.0 / num_assets
     for asset in context.assets:
-        await context.order_target_percent(asset=asset,
-                                           target=target_percent, style=MarketOrder())
+        # await context.order_target_percent(asset=asset,
+        #                                    target=target_percent, style=MarketOrder())
+        await context.order_target(asset=asset,
+                                           target=0.1, style=MarketOrder())

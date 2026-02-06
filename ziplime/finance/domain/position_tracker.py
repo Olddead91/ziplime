@@ -379,7 +379,7 @@ class PositionTracker:
 
     def get_position_list(self):
         return [
-            pos.to_dict() for asset, pos in self.positions.items() if pos.amount != 0
+            pos for asset, pos in self.positions.items() if pos.amount != 0
         ]
 
     def sync_last_sale_prices(self, dt: datetime.datetime,

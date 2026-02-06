@@ -31,3 +31,7 @@ class Transaction:
             "commission": self.commission,
             "asset": self.asset,
         }
+
+
+    def total_price(self) -> float:
+        return self.price * self.amount

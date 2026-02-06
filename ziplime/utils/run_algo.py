@@ -2,7 +2,7 @@ import datetime
 import sys
 
 import structlog
-
+from typing import AsyncIterator
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
@@ -13,6 +13,7 @@ from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
 from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.pipeline.loaders import EquityPricingLoader
 from ziplime.sources.benchmark_source import BenchmarkSource
+from ziplime.trading.trading_algorithm_execution_status import TradingAlgorithmExecutionStatus
 from ziplime.trading.trading_algorithm_executor import TradingAlgorithmExecutor
 import polars as pl
 
@@ -45,6 +46,68 @@ async def run_algorithm(
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
+        max_leverage: float  = 1.0
+) -> TradingAlgorithmExecutionResult:
+    """Run a backtest for the given algorithm.
+    This is shared between the cli and :func:`ziplime.run_algo`.
+    """
+    tr = await _prepare_algorithm(algorithm=algorithm, asset_service=asset_service, print_algo=print_algo,
+                                  exchanges=exchanges, metrics_set=metrics_set, custom_loader=custom_loader,
+                                  clock=clock, custom_data_sources=custom_data_sources, stop_on_error=stop_on_error,
+                                  benchmark_asset_symbol=benchmark_asset_symbol, benchmark_returns=benchmark_returns,
+                                  max_leverage=max_leverage)
+    trading_algorithm_executor = TradingAlgorithmExecutor()
+    start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
+    result = await trading_algorithm_executor.run_algorithm(trading_algorithm=tr)
+
+    end_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
+    logger.info(
+        f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds. Errors: {len(result.errors)}")
+    return result
+
+async def run_algorithm_iter(
+        algorithm: AlgorithmFile,
+        asset_service: AssetService,
+        print_algo: bool,
+        exchanges: list[Exchange],
+        metrics_set: str,
+        custom_loader,
+        clock: TradingClock,
+        custom_data_sources: list[DataSource],
+        stop_on_error: bool = False,
+        benchmark_asset_symbol: str | None = None,
+        benchmark_returns: pl.Series | None = None,
+        max_leverage: float  = 1.0
+) -> AsyncIterator[TradingAlgorithmExecutionStatus]:
+    """Run a backtest for the given algorithm.
+    This is shared between the cli and :func:`ziplime.run_algo`.
+    """
+    tr = await _prepare_algorithm(algorithm=algorithm, asset_service=asset_service, print_algo=print_algo,
+                                  exchanges=exchanges, metrics_set=metrics_set, custom_loader=custom_loader,
+                                  clock=clock, custom_data_sources=custom_data_sources, stop_on_error=stop_on_error,
+                                  benchmark_asset_symbol=benchmark_asset_symbol, benchmark_returns=benchmark_returns,
+                                  max_leverage=max_leverage)
+    trading_algorithm_executor = TradingAlgorithmExecutor()
+    start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
+    async for status in trading_algorithm_executor.run_algorithm_iter(trading_algorithm=tr):
+        yield status
+    end_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
+    logger.info(
+        f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds.")
+
+async def _prepare_algorithm(
+        algorithm: AlgorithmFile,
+        asset_service: AssetService,
+        print_algo: bool,
+        exchanges: list[Exchange],
+        metrics_set: str,
+        custom_loader,
+        clock: TradingClock,
+        custom_data_sources: list[DataSource],
+        stop_on_error: bool = False,
+        benchmark_asset_symbol: str | None = None,
+        benchmark_returns: pl.Series | None = None,
+        max_leverage: float = 1.0
 ) -> TradingAlgorithmExecutionResult:
     """Run a backtest for the given algorithm.
     This is shared between the cli and :func:`ziplime.run_algo`.
@@ -111,9 +174,7 @@ async def run_algorithm(
         stop_on_error=stop_on_error,
         custom_data_sources=custom_data_sources
     )
-    trading_algorithm_executor = TradingAlgorithmExecutor()
-    start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
-    result = await trading_algorithm_executor.run_algorithm(trading_algorithm=tr)
-    end_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
-    logger.info(f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds. Errors: {len(result.errors)}")
-    return result
+
+    tr.set_max_leverage(max_leverage=max_leverage)
+
+    return tr

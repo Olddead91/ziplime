@@ -33,16 +33,10 @@ from ziplime.finance.controls.restricted_list_order import RestrictedListOrder
 from ziplime.finance.domain.ledger import Ledger
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.order_status import OrderStatus
-from ziplime.finance.metrics import MaxLeverage
+from ziplime.finance.controls.max_leverage import MaxLeverage
 from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.exchanges.exchange import Exchange
 from ziplime.trading.base_trading_algorithm import BaseTradingAlgorithm
-from ziplime.trading.entities.orders.limit_order_request import LimitOrderRequest
-from ziplime.trading.entities.orders.market_order_request import MarketOrderRequest
-from ziplime.trading.entities.orders.order_request import OrderRequest
-from ziplime.trading.entities.trading_pair import TradingPair
-from ziplime.trading.enums.order_side import OrderSide
-from ziplime.trading.enums.order_type import OrderType
 from ziplime.trading.enums.simulation_event import SimulationEvent
 from ziplime.trading.trading_signal_executor import TradingSignalExecutor
 from ziplime.utils.calendar_utils import get_calendar
