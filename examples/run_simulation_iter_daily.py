@@ -76,7 +76,7 @@ async def _run_simulation():
             benchmark_returns=None,
             stop_on_error=True,
             asset_service=asset_service,
-            equity_commission=equity_commission
+            equity_commission=equity_commission,
     ):
         print(status)
         if status.errors:

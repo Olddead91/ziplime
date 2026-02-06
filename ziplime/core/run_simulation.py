@@ -23,6 +23,7 @@ from ziplime.utils.run_algo import run_algorithm, run_algorithm_iter
 import polars as pl
 from typing import AsyncIterator
 
+
 async def run_simulation(
         start_date: datetime.datetime,
         end_date: datetime.datetime,
@@ -41,7 +42,8 @@ async def run_simulation(
         benchmark_returns: pl.Series | None = None,
         equity_commission: EquityCommissionModel | None = None,
         future_commission: FutureCommissionModel | None = None,
-        clock: TradingClock | None = None
+        clock: TradingClock | None = None,
+        max_leverage: float = 1.0
 ) -> TradingAlgorithmExecutionResult:
     """
     Run a trading algorithm simulation within a defined time period and trading environment.
@@ -148,7 +150,8 @@ async def run_simulation_iter(
         benchmark_returns: pl.Series | None = None,
         equity_commission: EquityCommissionModel | None = None,
         future_commission: FutureCommissionModel | None = None,
-        clock: TradingClock | None = None
+        clock: TradingClock | None = None,
+        max_leverage: float = 1.0
 ) -> AsyncIterator[TradingAlgorithmExecutionStatus]:
     """
     Run a trading algorithm simulation within a defined time period and trading environment.
@@ -234,5 +237,6 @@ async def run_simulation_iter(
             benchmark_asset_symbol=benchmark_asset_symbol,
             stop_on_error=stop_on_error,
             custom_data_sources=custom_data_sources,
+            max_leverage=max_leverage
     ):
         yield status
