@@ -273,6 +273,7 @@ class LimeTraderSdkExchange(Exchange):
                     continue
 
                 tx = Transaction(
+                    id=transaction_sdk.trade_id,
                     asset=asset,
                     amount=transaction_sdk.quantity if transaction_sdk.side == TradeSide.BUY else -transaction_sdk.quantity,
                     dt=transaction_sdk.timestamp,

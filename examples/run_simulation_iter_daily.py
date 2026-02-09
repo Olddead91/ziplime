@@ -83,7 +83,7 @@ async def _run_simulation():
             logger.error(status.errors)
         if status.result:
             logger.info("Algorithm finished")
-        # print(status.perf.head(n=10).to_markdown())
+            print(status.result.perf.head(n=10).to_markdown())
 
     # Get cash from algo
 

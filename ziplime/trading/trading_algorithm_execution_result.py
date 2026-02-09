@@ -11,4 +11,3 @@ class TradingAlgorithmExecutionResult:
     perf: pd.DataFrame
     risk_report: pd.DataFrame
     errors: list[str]
-

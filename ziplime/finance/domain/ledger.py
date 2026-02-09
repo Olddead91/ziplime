@@ -1,6 +1,6 @@
 import datetime
 import math
-from collections import OrderedDict
+from collections import OrderedDict, deque
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.position_tracker import PositionTracker
 from ziplime.finance.domain.transaction import Transaction
+from ziplime.trading.domain.lot import Lot
 
 
 class Ledger:
@@ -123,6 +124,8 @@ class Ledger:
         # calculation is done, but the last sale price either before the period
         # start, or when the price at execution.
         self._payout_last_sale_prices = {}
+
+        self._buy_lots_by_asset: dict[Asset, deque[Lot]] = {}
 
     @property
     def todays_returns(self) -> float:
@@ -234,6 +237,35 @@ class Ledger:
         except KeyError:
             # self._processed_transactions[transaction.dt] = [transaction_dict]
             self._processed_transactions[transaction.dt] = [transaction]
+
+        if asset not in self._buy_lots_by_asset:
+            self._buy_lots_by_asset[asset] = deque()
+        realized = 0.0
+
+        if transaction.amount > 0:
+            self._buy_lots_by_asset[asset].append(
+                Lot(quantity=transaction.amount, price=transaction.price, commission=transaction.commission or 0.00)
+            )
+        else:
+            sell_qty = -transaction.amount
+            sell_comm = transaction.commission or 0.00
+
+            while sell_qty > 0 and self._buy_lots_by_asset[asset]:
+                lot = self._buy_lots_by_asset[asset][0]
+                match_qty = min(sell_qty, lot.quantity)
+
+                pnl = (transaction.price - lot.price) * match_qty
+                realized += pnl
+
+                lot.quantity -= match_qty
+                sell_qty -= match_qty
+
+                # Drop empty lot
+                if lot.quantity == 0:
+                    self._buy_lots_by_asset[asset].popleft()
+
+            realized -= sell_comm
+        transaction.realized_pnl = realized
 
     def process_splits(self, splits):
         """Processes a list of splits by modifying any positions as needed.

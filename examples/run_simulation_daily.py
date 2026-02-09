@@ -89,10 +89,9 @@ async def _run_simulation():
     # Get cash from algo
     start_cash = sum(exchange.get_start_cash_balance() for exchange in result.trading_algorithm.exchanges.values())
     logger.info(f"Starting_cash: {start_cash}")
-
     for transaction_freq in result.perf.transactions:
         for transaction in transaction_freq:
-            print(transaction)
+            print(transaction.id, transaction.realized_pnl)
             start_cash -=  transaction.total_price()
             cash_flow["date"].append(transaction.dt)
             cash_flow["cash_change"].append(-transaction.total_price())

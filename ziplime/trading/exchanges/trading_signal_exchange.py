@@ -188,6 +188,7 @@ class TradingSignalExchange(Exchange):
                     continue
 
                 tx = Transaction(
+                    id=uuid.uuid4().hex,
                     asset=asset,
                     amount=transaction_sdk.quantity if transaction_sdk.side == TradeSide.BUY else -transaction_sdk.quantity,
                     dt=transaction_sdk.timestamp,

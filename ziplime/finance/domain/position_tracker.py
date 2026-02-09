@@ -1,3 +1,5 @@
+import uuid
+
 import datetime
 from collections import OrderedDict
 from functools import partial
@@ -361,6 +363,7 @@ class PositionTracker:
             price = self.positions.get(asset).last_sale_price
 
         return Transaction(
+            id=uuid.uuid4().hex,
             asset=asset,
             amount=-amount,
             dt=dt,

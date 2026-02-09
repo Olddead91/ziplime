@@ -1,3 +1,5 @@
+import uuid
+
 import datetime
 import math
 from abc import abstractmethod
@@ -153,6 +155,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
                     # )
 
                     txn = Transaction(
+                        id=uuid.uuid4().hex,
                         asset=order.asset,
                         amount=int(execution_volume),
                         dt=current_dt,
