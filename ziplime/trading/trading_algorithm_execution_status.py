@@ -8,6 +8,7 @@ from ziplime.trading.trading_algorithm_execution_result import TradingAlgorithmE
 
 @dataclass
 class TradingAlgorithmExecutionStatus:
+    perf: dict
     trading_algorithm: TradingAlgorithm
     daily_perf: dict
     cumulative_perf: dict

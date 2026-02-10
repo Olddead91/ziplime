@@ -79,6 +79,7 @@ class TradingAlgorithmExecutor:
                     continue
                 print("progress", perf["progress"])
                 status = TradingAlgorithmExecutionStatus(
+                    perf=perf,
                     cumulative_perf=perf["cumulative_perf"],
                     daily_perf=perf["daily_perf"],
                     cumulative_risk_metrics=perf["cumulative_risk_metrics"],
