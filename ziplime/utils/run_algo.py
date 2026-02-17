@@ -8,6 +8,7 @@ from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.data_source import DataSource
 from ziplime.exchanges.exchange import Exchange
+from ziplime.finance.controls.max_leverage import MaxLeverage
 
 from ziplime.finance.blotter.in_memory_blotter import InMemoryBlotter
 from ziplime.gens.domain.trading_clock import TradingClock
@@ -175,6 +176,8 @@ async def _prepare_algorithm(
         custom_data_sources=custom_data_sources
     )
 
-    tr.set_max_leverage(max_leverage=max_leverage)
+    if max_leverage is not None:
+        max_leverage = MaxLeverage(max_leverage, fail_on_error=False)
+        tr.register_account_control(control=max_leverage)
 
     return tr

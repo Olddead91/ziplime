@@ -129,6 +129,7 @@ async def run_simulation(
         benchmark_asset_symbol=benchmark_asset_symbol,
         stop_on_error=stop_on_error,
         custom_data_sources=custom_data_sources,
+        max_leverage=max_leverage
     )
 
 
