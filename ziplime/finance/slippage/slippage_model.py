@@ -3,6 +3,7 @@ import uuid
 import datetime
 import math
 from abc import abstractmethod
+from typing import Literal
 
 import structlog
 from pandas import isnull
@@ -68,7 +69,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
         return self._volume_for_bar
 
     @abstractmethod
-    def process_order(self, exchange: Exchange, dt: datetime.datetime, order):
+    def process_order(self, exchange: Exchange, dt: datetime.datetime, order, price: float = None):
         """Compute the number of shares and price to fill for ``order`` in the
         current minute.
 
@@ -106,12 +107,15 @@ class SlippageModel(metaclass=FinancialModelMeta):
         """
         raise NotImplementedError("process_order")
 
-    def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime):
+    def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime,
+                 same_bar_execution: bool, price_used_in_order_execution: Literal["open", "close", "low", "high"]):
         self._volume_for_bar = 0
-        current_val = exchange.current(assets=assets, fields=frozenset({"close", "volume"}), dt=current_dt)
+        current_val = exchange.current(assets=assets, fields=frozenset({"volume", price_used_in_order_execution}),
+                                       dt=current_dt)
 
         volume_s = current_val["volume"]
-        close_price_s = current_val["close"]
+        price_s = current_val[price_used_in_order_execution]
+        print("")
         if len(volume_s) == 0:
             self._logger.warning(f"No volume for {current_dt}, assets={[a.asset_name for a in assets]}")
             # volume is 0, since there is no volume our order couldn't have been executed
@@ -123,7 +127,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
 
         # can use the close price, since we verified there's volume in this
         # bar.
-        price = close_price_s[0]
+        price = price_s[0]
 
         # BEGIN
         #
@@ -144,9 +148,13 @@ class SlippageModel(metaclass=FinancialModelMeta):
             txn = None
 
             try:
-                execution_price, execution_volume = self.process_order(exchange=exchange, dt=current_dt, order=order)
+                execution_price, execution_volume = self.process_order(exchange=exchange, dt=current_dt, order=order,
+                                                                       price=price
+                                                                       )
 
                 if execution_price is not None:
+                    # print(
+                    #     f"[{current_dt}] Execution price for quantity {execution_volume} is {execution_price}. Open price is {price_s[0]} Total={execution_volume * execution_price}")
                     # txn = create_transaction(
                     #     order,
                     #     data.current_dt,

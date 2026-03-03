@@ -1,4 +1,5 @@
 import datetime
+import structlog
 
 from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.trading.trading_algorithm_execution_result import TradingAlgorithmExecutionResult
@@ -22,6 +23,9 @@ from ziplime.exchanges.simulation_exchange import SimulationExchange
 from ziplime.utils.run_algo import run_algorithm, run_algorithm_iter
 import polars as pl
 from typing import AsyncIterator
+from typing import Literal
+
+logger = structlog.get_logger(__name__)
 
 
 async def run_simulation(
@@ -43,7 +47,9 @@ async def run_simulation(
         equity_commission: EquityCommissionModel | None = None,
         future_commission: FutureCommissionModel | None = None,
         clock: TradingClock | None = None,
-        max_leverage: float = 1.0
+        max_leverage: float = 1.0,
+        same_bar_execution: bool = False,
+        price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> TradingAlgorithmExecutionResult:
     """
     Run a trading algorithm simulation within a defined time period and trading environment.
@@ -114,7 +120,8 @@ async def run_simulation(
             ),
             future_commission=future_commission,
             cash_balance=total_cash,
-            clock=clock
+            clock=clock,
+            price_used_in_order_execution=price_used_in_order_execution
         )
 
     return await run_algorithm(
@@ -129,7 +136,9 @@ async def run_simulation(
         benchmark_asset_symbol=benchmark_asset_symbol,
         stop_on_error=stop_on_error,
         custom_data_sources=custom_data_sources,
-        max_leverage=max_leverage
+        max_leverage=max_leverage,
+        same_bar_execution=same_bar_execution,
+        price_used_in_order_execution=price_used_in_order_execution
     )
 
 
@@ -152,7 +161,9 @@ async def run_simulation_iter(
         equity_commission: EquityCommissionModel | None = None,
         future_commission: FutureCommissionModel | None = None,
         clock: TradingClock | None = None,
-        max_leverage: float = 1.0
+        max_leverage: float = 1.0,
+        same_bar_execution: bool = False,
+        price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> AsyncIterator[TradingAlgorithmExecutionStatus]:
     """
     Run a trading algorithm simulation within a defined time period and trading environment.
@@ -211,6 +222,11 @@ async def run_simulation_iter(
         )
 
     if exchange is None:
+        if same_bar_execution and price_used_in_order_execution != "close":
+            logger.warning(
+                "You are using same bar execution while price_used_in_order_execution is not 'close'. "
+                "Your simulation might be wrong.")
+
         exchange = SimulationExchange(
             name=default_exchange_name,
             country_code="US",
@@ -223,7 +239,8 @@ async def run_simulation_iter(
             ),
             future_commission=future_commission,
             cash_balance=total_cash,
-            clock=clock
+            clock=clock,
+            price_used_in_order_execution=price_used_in_order_execution
         )
 
     async for status in run_algorithm_iter(
@@ -238,6 +255,8 @@ async def run_simulation_iter(
             benchmark_asset_symbol=benchmark_asset_symbol,
             stop_on_error=stop_on_error,
             custom_data_sources=custom_data_sources,
-            max_leverage=max_leverage
+            max_leverage=max_leverage,
+            same_bar_execution=same_bar_execution,
+            price_used_in_order_execution=price_used_in_order_execution
     ):
         yield status

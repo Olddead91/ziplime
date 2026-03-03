@@ -17,6 +17,7 @@ from ziplime.sources.benchmark_source import BenchmarkSource
 from ziplime.trading.trading_algorithm_execution_status import TradingAlgorithmExecutionStatus
 from ziplime.trading.trading_algorithm_executor import TradingAlgorithmExecutor
 import polars as pl
+from typing import Literal
 
 try:
     from pygments import highlight
@@ -47,7 +48,9 @@ async def run_algorithm(
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
-        max_leverage: float  = 1.0
+        max_leverage: float = 1.0,
+        same_bar_execution: bool = False,
+        price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> TradingAlgorithmExecutionResult:
     """Run a backtest for the given algorithm.
     This is shared between the cli and :func:`ziplime.run_algo`.
@@ -56,7 +59,8 @@ async def run_algorithm(
                                   exchanges=exchanges, metrics_set=metrics_set, custom_loader=custom_loader,
                                   clock=clock, custom_data_sources=custom_data_sources, stop_on_error=stop_on_error,
                                   benchmark_asset_symbol=benchmark_asset_symbol, benchmark_returns=benchmark_returns,
-                                  max_leverage=max_leverage)
+                                  max_leverage=max_leverage, same_bar_execution=same_bar_execution,
+                                  price_used_in_order_execution=price_used_in_order_execution)
     trading_algorithm_executor = TradingAlgorithmExecutor()
     start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
     result = await trading_algorithm_executor.run_algorithm(trading_algorithm=tr)
@@ -65,6 +69,7 @@ async def run_algorithm(
     logger.info(
         f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds. Errors: {len(result.errors)}")
     return result
+
 
 async def run_algorithm_iter(
         algorithm: AlgorithmFile,
@@ -78,7 +83,9 @@ async def run_algorithm_iter(
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
-        max_leverage: float  = 1.0
+        max_leverage: float = 1.0,
+        same_bar_execution: bool = False,
+        price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> AsyncIterator[TradingAlgorithmExecutionStatus]:
     """Run a backtest for the given algorithm.
     This is shared between the cli and :func:`ziplime.run_algo`.
@@ -87,7 +94,8 @@ async def run_algorithm_iter(
                                   exchanges=exchanges, metrics_set=metrics_set, custom_loader=custom_loader,
                                   clock=clock, custom_data_sources=custom_data_sources, stop_on_error=stop_on_error,
                                   benchmark_asset_symbol=benchmark_asset_symbol, benchmark_returns=benchmark_returns,
-                                  max_leverage=max_leverage)
+                                  max_leverage=max_leverage, same_bar_execution=same_bar_execution,
+                                  price_used_in_order_execution=price_used_in_order_execution)
     trading_algorithm_executor = TradingAlgorithmExecutor()
     start_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
     async for status in trading_algorithm_executor.run_algorithm_iter(trading_algorithm=tr):
@@ -95,6 +103,7 @@ async def run_algorithm_iter(
     end_time = datetime.datetime.now(tz=clock.trading_calendar.tz)
     logger.info(
         f"Backtest completed in {int((end_time - start_time).total_seconds())} seconds.")
+
 
 async def _prepare_algorithm(
         algorithm: AlgorithmFile,
@@ -108,7 +117,9 @@ async def _prepare_algorithm(
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
-        max_leverage: float = 1.0
+        max_leverage: float = 1.0,
+        same_bar_execution: bool = False,
+        price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> TradingAlgorithmExecutionResult:
     """Run a backtest for the given algorithm.
     This is shared between the cli and :func:`ziplime.run_algo`.
@@ -173,7 +184,8 @@ async def _prepare_algorithm(
         algorithm=algorithm,
         clock=clock,
         stop_on_error=stop_on_error,
-        custom_data_sources=custom_data_sources
+        custom_data_sources=custom_data_sources,
+        same_bar_execution=same_bar_execution,
     )
 
     if max_leverage is not None:

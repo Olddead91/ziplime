@@ -73,7 +73,8 @@ class MarketOrder(ExecutionStyle):
     This is the default for orders placed with :func:`~ziplime.api.order`.
     """
 
-    def __init__(self, exchange=None):
+    def __init__(self, same_day_execution: bool = True, exchange=None):
+        self.same_day_execution = same_day_execution
         self._exchange = exchange
 
     def get_limit_price(self, is_buy: bool):

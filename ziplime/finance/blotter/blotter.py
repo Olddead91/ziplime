@@ -3,10 +3,7 @@ from abc import ABC, abstractmethod
 from ziplime.assets.entities.asset import Asset
 from ziplime.finance.cancel_policy import NeverCancel
 
-from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.order import Order
-from ziplime.finance.domain.transaction import Transaction
-from ziplime.domain.bar_data import BarData
 
 
 class Blotter(ABC):

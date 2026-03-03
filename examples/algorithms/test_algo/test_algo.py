@@ -24,21 +24,23 @@ class AlgorithmConfig(BaseAlgorithmConfig):
 
 
 async def initialize(context):
-    context.assets = [
-        await context.symbol("META"),
-        await context.symbol("AMZN"),
-        await context.symbol("NFLX"),
-        await context.symbol("GOOGL")
-    ]
-    # read config file
-    logger.info("Algorithm config: ", config=context.algorithm.config)
+    context.asset = await context.symbol("AAPL")
+    context.short_window = 50
+    context.long_window = 200
 
 
 async def handle_data(context, data):
-    num_assets = len(context.assets)
-    target_percent = 1.0 / num_assets
-    for asset in context.assets:
-        # await context.order_target_percent(asset=asset,
-        #                                    target=target_percent, style=MarketOrder())
-        await context.order_target_percent(asset=asset,
-                                           target=0.2, style=MarketOrder())
+    asset = context.asset
+    df = data.history(assets=[asset], fields=["close"], bar_count=context.long_window)
+    prices = df["close"].to_numpy()
+
+    current_amount = getattr(context.portfolio.positions.get(asset, 0), 'amount', 0)
+
+    order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())
+
+    order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
+    # if order_buy:
+    #     print(f"[{context.simulation_dt}]Buy order, quantity={order_buy.amount},  status={order_buy.status}, cash={context.portfolio.cash}")
+    # if order_sell:
+    #     print(f"[{context.simulation_dt}]Sell order, quantity={order_sell.amount}, status={order_sell.status}, cash={context.portfolio.cash}")
+    #

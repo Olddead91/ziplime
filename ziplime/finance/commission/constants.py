@@ -1,0 +1,4 @@
+DEFAULT_PER_SHARE_COST = 0.001  # 0.1 cents per share
+DEFAULT_PER_CONTRACT_COST = 0.85  # $0.85 per future contract
+DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE = 0.0  # $0 per trade
+DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE = 0.0  # $0 per trade

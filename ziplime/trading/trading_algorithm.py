@@ -7,7 +7,7 @@ from collections import namedtuple, OrderedDict
 from contextlib import AsyncExitStack
 from copy import copy
 import warnings
-from typing import Callable
+from typing import Callable, Literal
 import pandas as pd
 import structlog
 
@@ -193,7 +193,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             capital_changes=None,
             get_pipeline_loader=None,
             create_event_context=None,
-            stop_on_error: bool = False
+            stop_on_error: bool = False,
+            same_bar_execution: bool = False,
     ):
         self.algorithm = algorithm
         self.config = algorithm.config
@@ -304,7 +305,15 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         self.clock = clock
 
+        self.same_bar_execution = same_bar_execution
         self._logger = structlog.get_logger(__name__)
+
+        if self.same_bar_execution:
+            self._logger.warning(
+                "You are running same day execution. Submitted orders in handle_data will be executed in the SAME bar where handle_data is running.")
+        else:
+            self._logger.warning(
+                "You are NOT running same day execution. Submitted orders in handle_data will be executed in the NEXT bar after handle_data is finished.")
 
     def init_engine(self, get_loader):
         """Construct and store a PipelineEngine from loader.
@@ -782,10 +791,10 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         else:
             # last_price = self.current_data.current([asset], fields={"price"})["price"][0]
             last_price_data = self.exchanges[exchange_name].current(frozenset({asset}),
-                                                               dt=self.simulation_dt,
-                                                               fields=frozenset({"price"}))["price"]
+                                                                    dt=self.simulation_dt,
+                                                                    fields=frozenset({"price"}))["price"]
             if len(last_price_data) == 0:
-            # if last_price is None:
+                # if last_price is None:
                 raise CannotOrderDelistedAsset(
                     msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
                 )
@@ -1293,9 +1302,32 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    def _calculate_order_percent_amount(self, asset: Asset, percent: float, exchange_name: str):
+    def _calculate_order_percent_amount(self, asset: Asset, percent: float, exchange_name: str,
+                                        reserved_percentage_for_fees: float = 0.00):
+        # value = self.portfolio.portfolio_value * percent
+        # return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
+
+        # value = min(self.portfolio.portfolio_value - self.portfolio.portfolio_value * reserved_percentage_for_fees,
+        #             self.portfolio.portfolio_value * percent)
+        # print(f"Value for order: old={self.portfolio.portfolio_value * percent}, new={value}")
+        exchange = self.exchanges[exchange_name]
         value = self.portfolio.portfolio_value * percent
-        return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
+
+        requested_quantity = self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
+        commission = exchange.get_commission_model(asset=asset)
+        slippage = exchange.get_slippage_model(asset=asset)
+        projected_commission = commission.calculate_for_asset(asset=asset, quantity=requested_quantity)
+        new_quantity = self._calculate_order_value_amount(asset=asset, value=value - projected_commission,
+                                                          exchange_name=exchange_name)
+        # return new_quantity
+        estimated_price, estimated_quantity = slippage.order_target_percentage_maximum_quantity(asset=asset,
+                                                                                                exchange=exchange,
+                                                                                                percentage=percent,
+                                                                                                available_cash=value,
+                                                                                                dt=self.simulation_dt)
+        # print(
+        #     f"[{self.simulation_dt}] Calculating PRICE FOR handle_data ({estimated_quantity} * {estimated_price})={estimated_quantity * estimated_price}, price_with_slippage={estimated_price} cash_before={self.portfolio.cash}")
+        return min(estimated_quantity, new_quantity)
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
@@ -1436,7 +1468,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_percent(
             self, asset: Asset, target: float,
-            style: ExecutionStyle, exchange_name: str | None = None
+            style: ExecutionStyle, exchange_name: str | None = None,
+            reserved_percentage_for_fees: float = 0.05
     ):
         """Place an order to adjust a position to a target percent of the
         current portfolio value. If the position doesn't already exist, this is
@@ -1490,7 +1523,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             return None
 
         target_amount = self._calculate_order_percent_amount(asset=asset, percent=target,
-                                                             exchange_name=exchange_name or self.default_exchange.name)
+                                                             exchange_name=exchange_name or self.default_exchange.name,
+                                                             reserved_percentage_for_fees=reserved_percentage_for_fees)
         amount = self._calculate_order_target_amount(asset=asset, target=target_amount)
 
         return await self.order(
@@ -1982,6 +2016,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # self.datetime = dt_to_use
         # called every tick (minute or day).
         # self.on_dt_changed(dt=dt_to_use)
+        if self.same_bar_execution:
+            await handle_data(context=self, data=current_data, dt=dt_to_use)
 
         # handle any transactions and commissions coming out new orders
         # placed in the last bar
@@ -1989,22 +2025,30 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         new_commissions = []
         closed_orders = []
         for exchange in self.exchanges.values():
+            # print("LEVERAGE BEFORE: ", self.account.leverage, self.account.net_leverage)
+
             (
                 new_trans,
                 new_comm,
                 closed,
             ) = await exchange.get_transactions(
                 orders=self.blotter.get_open_orders(exchange_name=exchange.name),
-                current_dt=self.simulation_dt
+                current_dt=self.simulation_dt,
+                same_bar_execution=self.same_bar_execution,
             )
             new_transactions.extend(new_trans)
             new_commissions.extend(new_comm)
             closed_orders.extend(closed)
+            # print("LEVERAGE: AFTER ", self.account.leverage, self.account.net_leverage)
+
         # print(f"getting transactions for {current_data.current_dt}, new transactions: {len(new_transactions)}, new commissions: {len(new_commissions)}, closed orders: {len(closed_orders)}" )
         self.blotter.prune_orders(closed_orders=closed_orders)
 
         for transaction in new_transactions:
             self._ledger.process_transaction(transaction=transaction)
+            # if self.account.leverage > 2:
+            #    print("a")
+            # print("LEVERAGE: AFTER 2", self.account.leverage, self.account.net_leverage)
 
             if transaction.order_id is None:
                 # TODO: fix this when we get back order id in transaction
@@ -2013,21 +2057,28 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             # since this order was modified, record it
             order = self.blotter.get_order_by_id(transaction.order_id, exchange_name=transaction.exchange_name)
             self._ledger.process_order(order=order)
+            # print("LEVERAGE: AFTER 3", self.account.leverage, self.account.net_leverage)
+
+        # print("LEVERAGE: BEFORE COMMISION", self.account.leverage, self.account.net_leverage)
 
         for commission in new_commissions:
-            self._ledger.process_commission(commission=commission)
-
-        await handle_data(context=self, data=current_data, dt=dt_to_use)
+            self._ledger.process_commission(commission=commission, tr=self)
+        # print("LEVERAGE: BEFORE 4", self.account.leverage, self.account.net_leverage)
+        if not self.same_bar_execution:
+            await handle_data(context=self, data=current_data, dt=dt_to_use)
+        # print("LEVERAGE: AFTER 4", self.account.leverage, self.account.net_leverage)
 
         # grab any new orders from the blotter, then clear the list.
         # this includes cancelled orders.
         new_orders = self.new_orders
+        # print(f"[{self.simulation_dt}]new_orders={new_orders}")
         self.new_orders = dict()
 
         # if we have any new orders, record them so that we know
         # in what perf period they were placed.
         for new_order in new_orders.values():
             self._ledger.process_order(order=new_order)
+            # print("LEVERAGE: AFTER 5", self.account.leverage, self.account.net_leverage)
 
     async def once_a_day(
             self,
@@ -2107,10 +2158,11 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                         async for capital_change_packet in self.every_bar(dt_to_use=dt, current_data=self.current_data,
                                                                           handle_data=self.event_manager.handle_data):
                             yield capital_change_packet, []
+
                     elif action == SimulationEvent.SESSION_START:
                         async for capital_change_packet in self.once_a_day(midnight_dt=dt,
-                                                                     current_data=self.current_data,
-                                                                     asset_service=self.asset_service):
+                                                                           current_data=self.current_data,
+                                                                           asset_service=self.asset_service):
                             yield capital_change_packet, []
                     elif action == SimulationEvent.SESSION_END:
                         # End of the session.
