@@ -48,7 +48,7 @@ async def run_simulation(
         future_commission: FutureCommissionModel | None = None,
         clock: TradingClock | None = None,
         max_leverage: float = 1.0,
-        same_bar_execution: bool = False,
+        same_bar_execution: bool = True,
         price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> TradingAlgorithmExecutionResult:
     """
@@ -162,7 +162,7 @@ async def run_simulation_iter(
         future_commission: FutureCommissionModel | None = None,
         clock: TradingClock | None = None,
         max_leverage: float = 1.0,
-        same_bar_execution: bool = False,
+        same_bar_execution: bool = True,
         price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> AsyncIterator[TradingAlgorithmExecutionStatus]:
     """

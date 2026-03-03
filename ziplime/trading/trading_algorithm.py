@@ -194,7 +194,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             get_pipeline_loader=None,
             create_event_context=None,
             stop_on_error: bool = False,
-            same_bar_execution: bool = False,
+            same_bar_execution: bool = True,
     ):
         self.algorithm = algorithm
         self.config = algorithm.config

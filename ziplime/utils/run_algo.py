@@ -49,7 +49,7 @@ async def run_algorithm(
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
         max_leverage: float = 1.0,
-        same_bar_execution: bool = False,
+        same_bar_execution: bool = True,
         price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> TradingAlgorithmExecutionResult:
     """Run a backtest for the given algorithm.
@@ -84,7 +84,7 @@ async def run_algorithm_iter(
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
         max_leverage: float = 1.0,
-        same_bar_execution: bool = False,
+        same_bar_execution: bool = True,
         price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> AsyncIterator[TradingAlgorithmExecutionStatus]:
     """Run a backtest for the given algorithm.
@@ -118,7 +118,7 @@ async def _prepare_algorithm(
         benchmark_asset_symbol: str | None = None,
         benchmark_returns: pl.Series | None = None,
         max_leverage: float = 1.0,
-        same_bar_execution: bool = False,
+        same_bar_execution: bool = True,
         price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
 ) -> TradingAlgorithmExecutionResult:
     """Run a backtest for the given algorithm.
