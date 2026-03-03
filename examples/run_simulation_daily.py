@@ -74,9 +74,12 @@ async def _run_simulation():
         emission_rate=datetime.timedelta(days=1),
         benchmark_asset_symbol="AAPL",
         benchmark_returns=None,
-        stop_on_error=False,
+        stop_on_error=True,
         asset_service=asset_service,
-        equity_commission=equity_commission
+        equity_commission=equity_commission,
+        max_leverage=1.0,
+        same_bar_execution=True,
+        price_used_in_order_execution="close"
     )
 
     if result.errors:
@@ -91,8 +94,9 @@ async def _run_simulation():
     logger.info(f"Starting_cash: {start_cash}")
     for transaction_freq in result.perf.transactions:
         for transaction in transaction_freq:
-            print(transaction.id, transaction.realized_pnl)
+
             start_cash -=  transaction.total_price()
+            print("Start cash: ", start_cash,)
             cash_flow["date"].append(transaction.dt)
             cash_flow["cash_change"].append(-transaction.total_price())
             cash_flow["cash_left"].append(start_cash)

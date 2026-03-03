@@ -11,7 +11,7 @@ from ziplime.data.services.data_source import DataSource
 from ziplime.domain.position import Position
 from ziplime.domain.portfolio import Portfolio
 from ziplime.domain.account import Account
-from ziplime.finance.commission import CommissionModel
+from ziplime.finance.commission.commission_model import CommissionModel
 from ziplime.finance.domain.order import Order
 # from ziplime.finance.slippage.slippage_model import SlippageModel
 from ziplime.gens.domain.trading_clock import TradingClock
@@ -70,7 +70,8 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], current_dt: datetime.datetime):
+    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], current_dt: datetime.datetime,
+                               same_bar_execution: bool):
         ...
 
     @abstractmethod

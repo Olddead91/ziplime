@@ -222,8 +222,10 @@ class Ledger:
                     self._payout_last_sale_prices[asset] = price
         else:
             self._cash_flow(-(transaction.price * transaction.amount))
+        #print("LEVERAGE: BEFORE EXCEUTION", self.account.leverage, self.account.net_leverage)
 
         self.position_tracker.execute_transaction(transaction)
+        #print("LEVERAGE: AFTER EXCEUTION", self.account.leverage, self.account.net_leverage)
 
         # we only ever want the dict form from now on
         # transaction_dict = transaction.to_dict()
@@ -303,7 +305,7 @@ class Ledger:
 
         self._orders_by_id.move_to_end(order.id, last=True)
 
-    def process_commission(self, commission: CommissionModel):
+    def process_commission(self, commission: CommissionModel, tr):
         """Process the commission.
 
         Parameters
@@ -313,9 +315,13 @@ class Ledger:
         """
         asset = commission["asset"]
         cost = commission["cost"]
-
+        #print(f"Commission for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
         self.position_tracker.handle_commission(asset, cost)
+        #print(f"Commission 2 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
+
         self._cash_flow(-cost)
+        #print(f"Commission 3 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
+
 
     def close_position(self, asset: Asset, dt: datetime.datetime):
         txn = self.position_tracker.maybe_create_close_position_transaction(
@@ -487,7 +493,8 @@ class Ledger:
         else:
             gross_leverage = position_stats.gross_exposure / portfolio_value
             net_leverage = position_stats.net_exposure / portfolio_value
-
+        if gross_leverage>5:
+            print("a")
         return portfolio_value, gross_leverage, net_leverage
 
     @property

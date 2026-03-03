@@ -1,5 +1,7 @@
 import datetime
+import math
 
+from ziplime.assets.entities.asset import Asset
 from ziplime.errors import LiquidityExceeded
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.order import Order
@@ -63,12 +65,12 @@ class FixedBasisPointsSlippage(SlippageModel):
             volume_limit=self.volume_limit,
         )
 
-    def process_order(self, exchange: Exchange, dt:datetime.datetime, order: Order) -> tuple[float, float]:
-        current_val = exchange.current(assets=frozenset({order.asset}), fields=frozenset({"close", "volume"}), dt=dt)
+    def process_order(self, exchange: Exchange, dt: datetime.datetime, order: Order, price: float=None) -> tuple[float, float]:
+        current_val = exchange.current(assets=frozenset({order.asset}), fields=frozenset({"open","close", "volume"}), dt=dt)
         volume = current_val["volume"][0]
         max_volume = int(self.volume_limit * volume)
-
-        price = current_val["close"][0]
+        if price is None:
+            price = current_val["close"][0]
         shares_to_fill = min(abs(order.open_amount), max_volume - self.volume_for_bar)
 
         if shares_to_fill == 0:
@@ -78,3 +80,23 @@ class FixedBasisPointsSlippage(SlippageModel):
             price + price * (self.percentage * order.direction),
             shares_to_fill * order.direction,
         )
+
+    def order_target_percentage_maximum_quantity(self, exchange: Exchange, dt: datetime.datetime, asset: Asset,
+                                percentage: float,
+                                available_cash: float) -> tuple[float, float]:
+
+        current_val = exchange.current(assets=frozenset({asset}), fields=frozenset({"close", "volume", }), dt=dt)
+        volume = current_val["volume"][0]
+        max_volume = int(self.volume_limit * volume)
+
+        price = current_val["close"][0]
+
+        slippage = self.percentage * math.copysign(1, 1)  # +1 for buy, -1 for sell if needed
+        price_with_slippage = price * (1 + slippage)
+
+        target_cash = available_cash * percentage
+        max_quantity = target_cash / price_with_slippage
+        shares_to_fill = min(abs(max_quantity), max_volume - self.volume_for_bar)
+        # print(f"estimated_price_for_target_percentage={price_with_slippage}, shares_to_fill={shares_to_fill},"
+        #       f"price_without_slippage={price}")
+        return price_with_slippage, shares_to_fill

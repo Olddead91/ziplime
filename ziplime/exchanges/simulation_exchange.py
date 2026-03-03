@@ -1,5 +1,6 @@
 import datetime
 from functools import lru_cache
+from typing import Literal
 
 import polars as pl
 import uuid
@@ -35,7 +36,8 @@ class SimulationExchange(Exchange):
                  equity_commission: EquityCommissionModel,
                  future_commission: FutureCommissionModel,
                  data_source: DataSource = None,
-                 extra_data_sources: list = None
+                 extra_data_sources: list = None,
+                 price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
                  ):
         super().__init__(name=name,
                          canonical_name=name,
@@ -52,6 +54,7 @@ class SimulationExchange(Exchange):
             FuturesContract: future_commission,
         }
         self.cash_balance = cash_balance
+        self.price_used_in_order_execution=price_used_in_order_execution
 
     def get_start_cash_balance(self) -> float:
         return self.cash_balance
@@ -91,7 +94,7 @@ class SimulationExchange(Exchange):
         pass
 
     async def get_transactions(self, orders: dict[Asset, dict[str, Order]],
-                               current_dt: datetime.datetime):
+                               current_dt: datetime.datetime, same_bar_execution: bool):
         """
         Creates a list of transactions based on the current open orders,
         slippage model, and commission model.
@@ -130,7 +133,9 @@ class SimulationExchange(Exchange):
 
             for order, txn in slippage.simulate(exchange=self, assets=frozenset({asset}),
                                                 orders_for_asset=asset_orders.values(),
-                                                current_dt=current_dt
+                                                current_dt=current_dt,
+                                                same_bar_execution=same_bar_execution,
+                                                price_used_in_order_execution=self.price_used_in_order_execution
                                                 ):
                 commission = self.get_commission_model(asset=asset)
                 additional_commission = commission.calculate(order=order, transaction=txn)
