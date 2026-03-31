@@ -94,7 +94,7 @@ class MetricsTracker:
         # don't compare these strings over and over again!
         self._progress = progress
 
-    def handle_start_of_simulation(self):
+    async def handle_start_of_simulation(self):
         for metric in self._start_of_simulation_metrics:
             metric.start_of_simulation(
                 ledger=self._ledger,
@@ -152,22 +152,13 @@ class MetricsTracker:
         session_label : Timestamp
             The label of the session that is about to begin.
         """
-        self._ledger.start_of_session(session_label=session_label)
-
-        # TODO: handle ajustments repository
-        adjustment_reader = self.asset_service._adjustments_repository
-        if adjustment_reader is not None:
-            # this is None when running with a dataframe source
-            await self._ledger.process_dividends(
-                next_session=session_label,
-                adjustment_reader=adjustment_reader,
-            )
 
         self._current_session = session_label
         self._market_open = self._trading_calendar.session_first_minute(session_label)
 
         for metric in self._start_of_session_metrics:
             metric.start_of_session(ledger=self._ledger, session=session_label, exchanges=self.exchanges)
+        print("A")
         # self.start_of_session(ledger=self._ledger, session=session_label, data_bundle=data_bundle)
 
     def handle_market_close(self, dt: datetime.datetime):
@@ -182,11 +173,6 @@ class MetricsTracker:
         A daily perf packet.
         """
 
-        if self.emission_rate == datetime.timedelta(days=1):
-            # this method is called for both minutely and daily emissions, but
-            # this chunk of code here only applies for daily emissions. (since
-            # it's done every minute, elsewhere, for minutely emission).
-            self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
 
         session_ix = self._session_count
         # increment the day counter before we move markers forward.
@@ -207,7 +193,7 @@ class MetricsTracker:
             "progress": self._progress(self),
             "cumulative_risk_metrics": {},
         }
-        self._ledger.end_of_session(session_ix=session_ix)
+        # self._ledger.end_of_session(session_ix=session_ix)
 
         for metric in self._end_of_session_metrics:
             metric.end_of_session(

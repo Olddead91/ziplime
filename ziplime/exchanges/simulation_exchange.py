@@ -17,6 +17,7 @@ from ziplime.domain.position import Position
 from ziplime.domain.portfolio import Portfolio
 from ziplime.domain.account import Account
 from ziplime.finance.commission import EquityCommissionModel, FutureCommissionModel, CommissionModel
+from ziplime.finance.domain.commission import Commission
 from ziplime.finance.domain.order import Order
 from ziplime.finance.slippage.slippage_model import SlippageModel
 from ziplime.exchanges.exchange import Exchange
@@ -72,25 +73,25 @@ class SimulationExchange(Exchange):
         order.id = uuid.uuid4().hex
         return order
 
-    def get_positions(self) -> dict[Asset, Position]:
+    async def get_positions(self) -> dict[Asset, Position]:
         pass
 
-    def get_portfolio(self) -> Portfolio:
+    async def get_portfolio(self) -> Portfolio:
         pass
 
-    def get_account(self) -> Account:
+    async def get_account(self) -> Account:
         pass
 
     def get_time_skew(self):
         pass
 
-    def order(self, asset, amount, style):
+    async def order(self, asset, amount, style):
         pass
 
     def is_alive(self):
         pass
 
-    def get_orders(self) -> dict[str, Order]:
+    async def get_orders(self) -> dict[str, Order]:
         pass
 
     async def get_transactions(self, orders: dict[Asset, dict[str, Order]],
@@ -142,20 +143,17 @@ class SimulationExchange(Exchange):
 
                 if additional_commission > 0:
                     commissions.append(
-                        {
-                            "asset": order.asset,
-                            "order": order,
-                            "cost": additional_commission,
-                        }
+                        Commission(
+                            asset=order.asset,
+                            order=order,
+                            amount=additional_commission,
+                        )
                     )
 
                 order.filled += txn.amount
                 order.commission += additional_commission
-
                 order.dt = txn.dt
-
                 transactions.append(txn)
-
                 if not order.open:
                     closed_orders.append(order)
 

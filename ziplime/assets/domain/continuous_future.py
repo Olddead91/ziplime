@@ -109,17 +109,6 @@ class ContinuousFuture:
                                  self.roll_style,
                                  self.exchange))
 
-    def to_dict(self):
-        """Convert to a python dict."""
-        return {
-            'sid': self.sid,
-            'root_symbol': self.root_symbol,
-            'start_date': self.start_date,
-            'end_date': self.end_date,
-            'offset': self.offset,
-            'roll_style': self.roll_style,
-            'exchange': self.exchange,
-        }
 
     @classmethod
     def from_dict(cls, dict_):

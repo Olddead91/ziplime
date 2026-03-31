@@ -307,7 +307,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         self.same_bar_execution = same_bar_execution
         self._logger = structlog.get_logger(__name__)
-
+        self._session_count = 0
         if self.same_bar_execution:
             self._logger.warning(
                 "You are running same day execution. Submitted orders in handle_data will be executed in the SAME bar where handle_data is running.")
@@ -393,7 +393,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self.initialized:
             await self.initialize()
             self.initialized = True
-        self.metrics_tracker.handle_start_of_simulation()
+        await self.metrics_tracker.handle_start_of_simulation()
         return self.transform()
 
     # async def run(self):
@@ -1062,7 +1062,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     def recorded_vars(self):
         return copy(self._recorded_vars)
 
-    def _sync_last_sale_prices(self, dt: datetime.datetime = None):
+    async def _sync_last_sale_prices(self, dt: datetime.datetime = None):
         """Sync the last sale prices on the metrics tracker to a given
         datetime.
 
@@ -1080,17 +1080,17 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             dt = self.simulation_dt
 
         if dt != self._last_sync_time:
-            self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
+            await self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
             self._last_sync_time = dt
 
     @property
     def portfolio(self):
-        self._sync_last_sale_prices()
+        # self._sync_last_sale_prices()
         return self._ledger.portfolio
 
     @property
     def account(self):
-        self._sync_last_sale_prices()
+        # self._sync_last_sale_prices()
         return self._ledger.account
 
     # def on_dt_changed(self, dt):
@@ -2098,6 +2098,20 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # self.datetime = midnight_dt
         # self.on_dt_changed(midnight_dt)
 
+        # move processing of ledger and dividends before metrics
+        self._ledger.start_of_session(session_label=midnight_dt)
+        # TODO: handle ajustments repository
+        adjustment_reader = self.asset_service._adjustments_repository
+        if adjustment_reader is not None:
+            # this is None when running with a dataframe source
+            await self._ledger.process_dividends(
+                next_session=midnight_dt,
+                adjustment_reader=adjustment_reader,
+            )
+            # self._sync_last_sale_prices(dt=datetime.datetime.combine(midnight_dt, datetime.time())) # my
+            # self._ledger.update_portfolio()
+            # self._ledger.update_account()
+
         await self.metrics_tracker.handle_market_open(session_label=midnight_dt)
 
         # handle any splits that impact any positions or any open orders.
@@ -2155,11 +2169,16 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             for dt, action in self.clock:
                 try:
                     if action == SimulationEvent.BAR:
+                        await self._sync_last_sale_prices(dt=dt)
+                        await self._ledger.update_portfolio()
+                        self._ledger.update_account()
+
                         async for capital_change_packet in self.every_bar(dt_to_use=dt, current_data=self.current_data,
                                                                           handle_data=self.event_manager.handle_data):
                             yield capital_change_packet, []
 
                     elif action == SimulationEvent.SESSION_START:
+                        # TODO: add also portfolio update
                         async for capital_change_packet in self.once_a_day(midnight_dt=dt,
                                                                            current_data=self.current_data,
                                                                            asset_service=self.asset_service):
@@ -2172,11 +2191,27 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                         # await self.asset_service.retrieve_all(
                         #     sids=[a.sid for a in positions]
                         # )
-
+                        await self._sync_last_sale_prices(dt=dt)
+                        await self._ledger.update_portfolio()
+                        self._ledger.update_account()
                         self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
                         self.execute_order_cancellation_policy()
                         self.validate_account_controls()
+
+                        if self.clock.emission_rate == datetime.timedelta(days=1):
+                            # this method is called for both minutely and daily emissions, but
+                            # this chunk of code here only applies for daily emissions. (since
+                            # it's done every minute, elsewhere, for minutely emission).
+                            await self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)  # TODO : remove
+                            await self._sync_last_sale_prices(dt=dt)
+                            await self._ledger.update_portfolio()
+                            self._ledger.update_account()
+
+                        session_ix = self._session_count
+                        # increment the day counter before we move markers forward.
+                        self._session_count += 1
+                        self._ledger.end_of_session(session_ix=session_ix)
 
                         yield self._get_daily_message(dt=dt), []
                     elif action == SimulationEvent.BEFORE_TRADING_START_BAR:

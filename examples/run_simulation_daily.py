@@ -16,14 +16,15 @@ import pytz
 from ziplime.core.ingest_data import get_asset_service
 from ziplime.core.run_simulation import run_simulation
 from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE
+from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
 
 logger = structlog.get_logger(__name__)
 
 
 async def _run_simulation():
-    start_date = datetime.datetime(year=2025, month=1, day=3, tzinfo=pytz.timezone("America/New_York"))
+    start_date = datetime.datetime(year=2020, month=1, day=3, tzinfo=pytz.timezone("America/New_York"))
     end_date = datetime.datetime(year=2025, month=2, day=1, tzinfo=pytz.timezone("America/New_York"))
-
+    # Backtest completed in 3 seconds
     bundle_service = get_bundle_service()
 
     asset_service = get_asset_service(
@@ -60,6 +61,7 @@ async def _run_simulation():
         min_trade_cost=DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE,
 
     )
+    equity_slippage = FixedBasisPointsSlippage()
 
     # run daily simulation
     result = await run_simulation(
@@ -77,9 +79,10 @@ async def _run_simulation():
         stop_on_error=True,
         asset_service=asset_service,
         equity_commission=equity_commission,
+        equity_slippage=equity_slippage,
         max_leverage=1.0,
         same_bar_execution=True,
-        price_used_in_order_execution="close"
+        price_used_in_order_execution="close",
     )
 
     if result.errors:

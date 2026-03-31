@@ -3,7 +3,6 @@ import math
 from ziplime.assets.entities.asset import Asset
 from ziplime.finance.domain.order_status import OrderStatus
 from ziplime.finance.execution import ExecutionStyle
-from ziplime.protocol import DataSourceType
 
 SELL = 1 << 0
 BUY = 1 << 1
@@ -55,27 +54,8 @@ class Order:
         self.stop_reached = False
         self.limit_reached = False
         self.direction = math.copysign(1, self.amount)
-        self.type = DataSourceType.ORDER
         self.execution_style = execution_style
         self.exchange_order_id = exchange_order_id
-
-    def to_dict(self):
-        dct = {
-            "amount": self.amount,
-            "commission": self.commission,
-            "created": self.created,
-            "dt": self.dt,
-            "exchange_order_id": self.exchange_order_id,
-            "filled": self.filled,
-            "id": self.id,
-            "limit": self.limit,
-            "limit_reached": self.limit_reached,
-            "reason": self.reason,
-            "stop": self.stop,
-            "stop_reached": self.stop_reached,
-            "status": self.status
-        }
-        return dct
 
     def check_triggers(self, price, dt):
         """
@@ -230,4 +210,4 @@ class Order:
         """
         String representation for this object.
         """
-        return "Order(%s)" % self.to_dict().__repr__()
+        return f"Order({self.id})"

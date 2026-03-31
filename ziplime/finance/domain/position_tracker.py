@@ -47,6 +47,7 @@ class PositionTracker:
     def update_position(
             self,
             asset: Asset,
+            exchange: Exchange,
             amount: float | None = None,
             last_sale_price: float | None = None,
             last_sale_date=None,
@@ -55,11 +56,14 @@ class PositionTracker:
         self._dirty_stats = True
 
         if asset not in self.positions:
-            position = Position(asset,
-                                amount=0,
-                                cost_basis=float(0.0),
-                                last_sale_price=float(0.0),
-                                last_sale_date=None)
+            position = Position(
+                asset=asset,
+                exchange=exchange,
+                amount=0,
+                cost_basis=float(0.0),
+                last_sale_price=float(0.0),
+                last_sale_date=None,
+            )
             self.positions[asset] = position
         else:
             position = self.positions[asset]
@@ -80,6 +84,7 @@ class PositionTracker:
 
         if asset not in self.positions:
             position = Position(asset=asset,
+                                exchange=self.exchanges[txn.exchange_name],
                                 amount=0,
                                 cost_basis=0.0,
                                 last_sale_price=0.0,
@@ -137,9 +142,9 @@ class PositionTracker:
         # Adjust the cost basis of the stock if we own it
         if asset in self.positions:
             self._dirty_stats = True
-            self.adjust_commission_cost_basis(position=self.positions[asset], asset=asset, cost=cost)
+            self.adjust_commission_cost_basis(position=self.positions[asset], cost=cost)
 
-    def adjust_commission_cost_basis(self, position: Position, asset: Asset, cost: float):
+    def adjust_commission_cost_basis(self, position: Position, cost: float):
         """
         A note about cost-basis in ziplime: all positions are considered
         to share a cost basis, even if they were executed in different
@@ -150,8 +155,6 @@ class PositionTracker:
         all shares in a position.
         """
 
-        if asset != position.asset:
-            raise Exception("Updating a commission for a different asset?")
         if cost == 0.0:
             return
 
@@ -173,8 +176,8 @@ class PositionTracker:
         # cost_basis positive, while subtracting the commission.
 
         prev_cost = position.cost_basis * position.amount
-        if isinstance(asset, FuturesContract):
-            cost_to_use = cost / asset.price_multiplier
+        if isinstance(position.asset, FuturesContract):
+            cost_to_use = cost / position.asset.price_multiplier
         else:
             cost_to_use = cost
         new_cost = prev_cost + cost_to_use
@@ -385,9 +388,9 @@ class PositionTracker:
             pos for asset, pos in self.positions.items() if pos.amount != 0
         ]
 
-    def sync_last_sale_prices(self, dt: datetime.datetime,
-                              exchange_name:str,
-                              handle_non_market_minutes: bool = False):
+    async def sync_last_sale_prices(self, dt: datetime.datetime,
+                                    exchange_name: str,
+                                    handle_non_market_minutes: bool = False):
         self._dirty_stats = True
         exchange = self.exchanges[exchange_name]
         if handle_non_market_minutes:
@@ -411,7 +414,7 @@ class PositionTracker:
             inner_position = outer_position
 
             last_sale_price = get_price(inner_position.asset)["close"][0]
-
+            print(f"Last sale price for {inner_position.asset.asset_name} is {last_sale_price} at {dt}")
             # inline ~isnan because this gets called once per position per minute
             if last_sale_price is None:
 

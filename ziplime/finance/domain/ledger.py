@@ -12,6 +12,7 @@ from ziplime.domain.account import Account
 from ziplime.domain.portfolio import Portfolio
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.commission import CommissionModel
+from ziplime.finance.domain.commission import Commission
 
 from ziplime.finance.domain.order import Order
 from ziplime.finance.domain.position_tracker import PositionTracker
@@ -171,8 +172,8 @@ class Ledger:
         # save the daily returns time-series
         self.daily_returns_series.iloc[session_ix] = self.todays_returns
 
-    def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
-        self.position_tracker.sync_last_sale_prices(
+    async def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
+        await self.position_tracker.sync_last_sale_prices(
             dt=dt,
             handle_non_market_minutes=handle_non_market_minutes,
             exchange_name=self.default_exchange.name
@@ -222,10 +223,10 @@ class Ledger:
                     self._payout_last_sale_prices[asset] = price
         else:
             self._cash_flow(-(transaction.price * transaction.amount))
-        #print("LEVERAGE: BEFORE EXCEUTION", self.account.leverage, self.account.net_leverage)
+        # print("LEVERAGE: BEFORE EXCEUTION", self.account.leverage, self.account.net_leverage)
 
         self.position_tracker.execute_transaction(transaction)
-        #print("LEVERAGE: AFTER EXCEUTION", self.account.leverage, self.account.net_leverage)
+        # print("LEVERAGE: AFTER EXCEUTION", self.account.leverage, self.account.net_leverage)
 
         # we only ever want the dict form from now on
         # transaction_dict = transaction.to_dict()
@@ -313,13 +314,10 @@ class Ledger:
         commission : CommissionModel
             The commission being paid.
         """
-        asset = commission["asset"]
-        cost = commission["cost"]
         #print(f"Commission for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
-        self.position_tracker.handle_commission(asset, cost)
+        self.position_tracker.handle_commission(asset=commission.asset, cost=commission.amount)
         #print(f"Commission 2 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
-
-        self._cash_flow(-cost)
+        self._cash_flow(-commission.amount)
         #print(f"Commission 3 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
 
 
@@ -360,11 +358,9 @@ class Ledger:
 
         # Pay out the dividends whose pay-date is the next session. This does
         # affect out cash.
-        self._cash_flow(
-            position_tracker.pay_dividends(
-                next_session,
-            ),
-        )
+        dividends = position_tracker.pay_dividends(next_session)
+        if dividends > 0:
+            self._cash_flow(dividends)
 
     def capital_change(self, change_amount: float):
         self.update_portfolio()
@@ -424,15 +420,13 @@ class Ledger:
         return self.position_tracker.get_position_list()
 
     def _get_payout_total(self, positions):
-        calculate_payout = self._calculate_payout
-        payout_last_sale_prices = self._payout_last_sale_prices
 
         total = 0
-        for asset, old_price in payout_last_sale_prices.items():
+        for asset, old_price in self._payout_last_sale_prices.items():
             position = positions[asset]
-            payout_last_sale_prices[asset] = price = position.last_sale_price
+            self._payout_last_sale_prices[asset] = price = position.last_sale_price
             amount = position.amount
-            total += calculate_payout(
+            total += self._calculate_payout(
                 asset.price_multiplier,
                 amount,
                 old_price,
@@ -441,7 +435,7 @@ class Ledger:
 
         return total
 
-    def update_portfolio(self) -> None:
+    async def update_portfolio(self) -> None:
         """Force a computation of the current portfolio state."""
         if not self._dirty_portfolio:
             return
@@ -453,7 +447,9 @@ class Ledger:
 
         self._portfolio.positions_value = position_value = position_stats.net_value
         self._portfolio.positions_exposure = position_stats.net_exposure
-        self._cash_flow(self._get_payout_total(pt.positions))
+        payout_total = self._get_payout_total(pt.positions)
+        if payout_total > 0:
+            self._cash_flow(payout_total)
 
         start_value = self._portfolio.portfolio_value
 
@@ -481,7 +477,7 @@ class Ledger:
         This is cached, repeated access will not recompute the portfolio until
         the portfolio may have changed.
         """
-        self.update_portfolio()
+        # self.update_portfolio()
         return self._portfolio
 
     def calculate_period_stats(self):
@@ -493,53 +489,57 @@ class Ledger:
         else:
             gross_leverage = position_stats.gross_exposure / portfolio_value
             net_leverage = position_stats.net_exposure / portfolio_value
-        if gross_leverage>5:
+        if gross_leverage > 5:
             print("a")
         return portfolio_value, gross_leverage, net_leverage
 
+    def update_account(self):
+        if not self._dirty_account:
+            return
+
+        portfolio = self.portfolio
+
+        account = self._account
+
+        # If no attribute is found in the ``_account_overrides`` resort to
+        # the following default values. If an attribute is found use the
+        # existing value. For instance, a exchange may provide updates to
+        # these attributes. In this case we do not want to over write the
+        # exchange values with the default values.
+        account.settled_cash = portfolio.cash
+        account.accrued_interest = 0.00
+        account.buying_power = np.inf
+        account.equity_with_loan = portfolio.portfolio_value
+        account.total_positions_value = portfolio.portfolio_value - portfolio.cash
+        account.total_positions_exposure = portfolio.positions_exposure
+        account.regt_equity = portfolio.cash
+        account.regt_margin = np.inf
+        account.initial_margin_requirement = 0.00
+        account.maintenance_margin_requirement = 0.00
+        account.available_funds = portfolio.cash
+        account.excess_liquidity = portfolio.cash
+        account.cushion = (
+            (portfolio.cash / portfolio.portfolio_value)
+            if portfolio.portfolio_value
+            else np.nan
+        )
+        account.day_trades_remaining = np.inf
+        (
+            account.net_liquidation,
+            account.gross_leverage,
+            account.net_leverage,
+        ) = self.calculate_period_stats()
+
+        account.leverage = account.gross_leverage
+
+        # apply the overrides
+        for k, v in self._account_overrides.items():
+            setattr(account, k, v)
+
+        # the account has been fully synced
+        self._dirty_account = False
+
     @property
     def account(self):
-        if self._dirty_account:
-            portfolio = self.portfolio
-
-            account = self._account
-
-            # If no attribute is found in the ``_account_overrides`` resort to
-            # the following default values. If an attribute is found use the
-            # existing value. For instance, a exchange may provide updates to
-            # these attributes. In this case we do not want to over write the
-            # exchange values with the default values.
-            account.settled_cash = portfolio.cash
-            account.accrued_interest = 0.00
-            account.buying_power = np.inf
-            account.equity_with_loan = portfolio.portfolio_value
-            account.total_positions_value = portfolio.portfolio_value - portfolio.cash
-            account.total_positions_exposure = portfolio.positions_exposure
-            account.regt_equity = portfolio.cash
-            account.regt_margin = np.inf
-            account.initial_margin_requirement = 0.00
-            account.maintenance_margin_requirement = 0.00
-            account.available_funds = portfolio.cash
-            account.excess_liquidity = portfolio.cash
-            account.cushion = (
-                (portfolio.cash / portfolio.portfolio_value)
-                if portfolio.portfolio_value
-                else np.nan
-            )
-            account.day_trades_remaining = np.inf
-            (
-                account.net_liquidation,
-                account.gross_leverage,
-                account.net_leverage,
-            ) = self.calculate_period_stats()
-
-            account.leverage = account.gross_leverage
-
-            # apply the overrides
-            for k, v in self._account_overrides.items():
-                setattr(account, k, v)
-
-            # the account has been fully synced
-            self._dirty_account = False
-
+        # self.update_account()
         return self._account

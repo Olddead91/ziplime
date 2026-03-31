@@ -1,6 +1,8 @@
 import datetime
 import structlog
 
+from ziplime.finance.slippage.equity_slippage_model import EquitySlippageModel
+from ziplime.finance.slippage.future_slippage_model import FutureSlippageModel
 from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.trading.trading_algorithm_execution_result import TradingAlgorithmExecutionResult
 from ziplime.trading.trading_algorithm_execution_status import TradingAlgorithmExecutionStatus
@@ -46,6 +48,8 @@ async def run_simulation(
         benchmark_returns: pl.Series | None = None,
         equity_commission: EquityCommissionModel | None = None,
         future_commission: FutureCommissionModel | None = None,
+        equity_slippage: EquitySlippageModel | None = None,
+        future_slippage: FutureSlippageModel | None = None,
         clock: TradingClock | None = None,
         max_leverage: float = 1.0,
         same_bar_execution: bool = True,
@@ -106,7 +110,12 @@ async def run_simulation(
             exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
             min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
         )
-
+    if equity_slippage is None:
+        equity_slippage = FixedBasisPointsSlippage()
+    if future_slippage is None:
+        future_slippage = VolatilityVolumeShare(
+            volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
+        )
     if exchange is None:
         exchange = SimulationExchange(
             name=default_exchange_name,
@@ -160,6 +169,8 @@ async def run_simulation_iter(
         benchmark_returns: pl.Series | None = None,
         equity_commission: EquityCommissionModel | None = None,
         future_commission: FutureCommissionModel | None = None,
+        equity_slippage: EquitySlippageModel | None = None,
+        future_slippage: FutureSlippageModel | None = None,
         clock: TradingClock | None = None,
         max_leverage: float = 1.0,
         same_bar_execution: bool = True,
@@ -220,6 +231,12 @@ async def run_simulation_iter(
             exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
             min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
         )
+    if equity_slippage is None:
+        equity_slippage = FixedBasisPointsSlippage()
+    if future_slippage is None:
+        future_slippage = VolatilityVolumeShare(
+                volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
+            )
 
     if exchange is None:
         if same_bar_execution and price_used_in_order_execution != "close":
@@ -232,11 +249,9 @@ async def run_simulation_iter(
             country_code="US",
             trading_calendar=calendar,
             data_source=market_data_source,
-            equity_slippage=FixedBasisPointsSlippage(),
+            equity_slippage=equity_slippage,
             equity_commission=equity_commission,
-            future_slippage=VolatilityVolumeShare(
-                volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-            ),
+            future_slippage=future_slippage,
             future_commission=future_commission,
             cash_balance=total_cash,
             clock=clock,
