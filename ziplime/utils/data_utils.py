@@ -12,7 +12,9 @@ async def _process_data(data: pl.DataFrame,
                         date_start: datetime.datetime,
                         date_end: datetime.datetime,
                         data_frequency_use_window_end: bool,
-                        asset_service: AssetService, name: str, symbols: list[str],
+                        asset_service: AssetService,
+                        name: str,
+                        symbols: list[str],
                         trading_calendar: ExchangeCalendar,
                         frequency: datetime.timedelta | Period, ):
     """Ingest data for a given bundle.        """
@@ -79,12 +81,12 @@ async def _process_data(data: pl.DataFrame,
         data = await _backfill_symbol_data(data=data, asset_service=asset_service,
                                                 required_sessions=required_sessions)
     else:
-        data = await _backfill_sid_data(data=data, asset_service=asset_service,
+        data = await backfill_sid_data(data=data, asset_service=asset_service,
                                              required_sessions=required_sessions)
     return data
 
 
-async def _backfill_sid_data(data: pl.DataFrame, asset_service: AssetService, required_sessions: pl.Series):
+async def backfill_sid_data(data: pl.DataFrame, asset_service: AssetService, required_sessions: pl.Series):
     unique_symbols = list(data["symbol"].unique())
     symbol_to_sid = {a.get_symbol_by_exchange(exchange_name=None): a.sid for a in
                      await asset_service.get_equities_by_symbols(unique_symbols)}
@@ -105,6 +107,9 @@ async def _backfill_sid_data(data: pl.DataFrame, asset_service: AssetService, re
             )
             # Concatenate with the original DataFrame
             data = pl.concat([data, new_rows_df], how="diagonal")
+        missing_symbols = set(unique_symbols) - set(symbol_to_sid)
+        if missing_symbols:
+            raise ValueError(f"Symbols are missing in asset database: {missing_symbols}")
 
         data = data.with_columns(
             pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64).alias("sid")

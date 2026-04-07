@@ -15,7 +15,7 @@ class RestrictedListOrder(TradingControl):
         super(RestrictedListOrder, self).__init__(on_error)
         self.restrictions = restrictions
 
-    def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
+    async def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
         """
         Fail if the asset is in the restricted_list.
         """

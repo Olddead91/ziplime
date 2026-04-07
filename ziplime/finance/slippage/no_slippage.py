@@ -14,7 +14,7 @@ class NoSlippage(SlippageModel):
     """
 
     @staticmethod
-    def process_order(exchange: Exchange, dt:datetime.datetime, order):
+    async def process_order(exchange: Exchange, dt:datetime.datetime, order):
         return (
             data.current(order.asset, "close"),
             order.amount,

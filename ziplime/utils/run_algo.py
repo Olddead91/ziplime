@@ -32,6 +32,8 @@ from ziplime.pipeline.data.equity_pricing import EquityPricing
 
 from ziplime.trading.trading_algorithm import TradingAlgorithm
 from ziplime.trading.trading_algorithm_execution_result import TradingAlgorithmExecutionResult
+from ziplime.assets.entities.asset import Asset
+from exchange_calendars import ExchangeCalendar
 
 logger = structlog.get_logger(__name__)
 
@@ -162,6 +164,32 @@ async def _prepare_algorithm(
         if benchmark_asset is None:
             raise ValueError(f"No asset found with symbol {benchmark_asset_symbol} for benchmark")
 
+    if len(clock.sessions) == 0:
+        benchmark_precalculated_series = pl.Series()
+
+    elif benchmark_asset is not None:
+        benchmark_precalculated_series = await _initialize_precalculated_series(
+            asset=benchmark_asset, trading_calendar=clock.trading_calendar, trading_days=clock.sessions,
+            exchange=exchanges[0],
+            benchmark_fields=frozenset({"close"}),
+            sessions=clock.sessions,
+            emission_rate=clock.emission_rate
+        )
+    elif benchmark_returns is not None:
+        all_bars = pl.from_pandas(
+            clock.trading_calendar.sessions_minutes(start=clock.sessions[0], end=clock.sessions[-1]).tz_convert(clock.trading_calendar.tz)
+        )
+        benchmark_precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
+            index_column="date", every=clock.emission_rate
+        ).agg(pl.col("close").sum())
+    else:
+        all_bars = pl.from_pandas(
+            clock.trading_calendar.sessions_minutes(start=clock.sessions[0], end=clock.sessions[-1]).tz_convert(clock.trading_calendar.tz)
+        )
+        benchmark_precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
+            index_column="date", every=clock.emission_rate
+        ).agg(pl.col("close").sum())
+
     benchmark_source = BenchmarkSource(
         asset_service=asset_service,
         benchmark_asset=benchmark_asset,
@@ -170,7 +198,8 @@ async def _prepare_algorithm(
         sessions=clock.sessions,
         exchange=exchanges[0],
         emission_rate=clock.emission_rate,
-        benchmark_fields=frozenset({"close"})
+        benchmark_fields=frozenset({"close"}),
+        precalculated_series=benchmark_precalculated_series
     )
     await benchmark_source.validate_benchmark(benchmark_asset=benchmark_asset)
 
@@ -193,3 +222,64 @@ async def _prepare_algorithm(
         tr.register_account_control(control=max_leverage)
 
     return tr
+
+
+async def _initialize_precalculated_series(
+            asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
+            exchange: Exchange,
+        emission_rate: datetime.timedelta,
+        sessions: pl.Series,
+        benchmark_fields: frozenset[str],
+):
+        """
+        Internal method that pre-calculates the benchmark return series for
+        use in the simulation.
+
+        Parameters
+        ----------
+        asset:  Asset to use
+
+        trading_calendar: TradingCalendar
+
+        trading_days: pd.DateTimeIndex
+
+        exchange: Exchange
+
+        Notes
+        -----
+        If the benchmark asset started trading after the simulation start,
+        or finished trading before the simulation end, exceptions are raised.
+
+        If the benchmark asset started trading the same day as the simulation
+        start, the first available minute price on that day is used instead
+        of the previous close.
+
+        We use history to get an adjusted price history for each day's close,
+        as of the look-back date (the last day of the simulation).  Prices are
+        fully adjusted for dividends, splits, and mergers.
+
+        Returns
+        -------
+        returns : pd.Series
+            indexed by trading day, whose values represent the %
+            change from close to close.
+        daily_returns : pd.Series
+            the partial daily returns for each minute
+        """
+        all_bars: pl.Series = pl.from_pandas(
+            trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(
+                trading_calendar.tz)
+        )
+        limit = all_bars.to_frame("date").group_by_dynamic(
+            index_column="date", every=emission_rate
+        ).agg()["date"].len()
+
+        benchmark_series = await exchange.get_data_by_limit(
+            fields=benchmark_fields,
+            limit=limit,
+            frequency=emission_rate,
+            end_date=all_bars[-1],
+            assets=frozenset({asset}),
+            include_end_date=True
+        )
+        return benchmark_series.with_columns(pl.col(benchmark_fields).pct_change().alias("pct_change"))  # [1:]

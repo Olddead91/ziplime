@@ -126,7 +126,7 @@ class LimeTraderSdkDataSource(DataBundleSource):
                 ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
                 return df
 
-    def get_data_by_limit(self, fields: frozenset[str],
+    async def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta,

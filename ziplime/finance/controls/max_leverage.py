@@ -24,7 +24,7 @@ class MaxLeverage(AccountControl):
             raise ValueError("max_leverage must be positive")
         self.fail_on_error = fail_on_error
 
-    def validate(self, _portfolio, _account, _algo_datetime, _algo_current_data):
+    async def validate(self, _portfolio, _account, _algo_datetime, _algo_current_data):
         """Fail if the leverage is greater than the allowed leverage."""
         if _account.leverage > self.max_leverage:
             if self.fail_on_error:

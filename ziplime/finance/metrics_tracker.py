@@ -116,7 +116,6 @@ class MetricsTracker:
         -------
         A minute perf packet.
         """
-        self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
         packet = {
             "period_start": self._first_session,
             "period_end": self._last_session,

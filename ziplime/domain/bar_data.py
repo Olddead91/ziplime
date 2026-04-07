@@ -96,7 +96,7 @@ class BarData:
         # return dt
         return dt
 
-    def current(self, assets: list[Asset], fields: list[str],
+    async def current(self, assets: list[Asset], fields: list[str],
                 data_source: str | None = None) -> pl.DataFrame:
         """Returns the "current" value of the given fields for the given assets
         at the current simulation time.
@@ -163,7 +163,7 @@ class BarData:
         if data_source is None:
             data_source = self.default_data_source.name
         if not self._adjust_minutes:
-            return self.data_sources[data_source].current(
+            return await self.data_sources[data_source].current(
                 assets=assets,
                 fields=fields,
                 dt=self._get_current_minute(),
@@ -280,7 +280,7 @@ class BarData:
             )
         )
 
-    def history(self, assets: list[Asset], bar_count: int,
+    async def history(self, assets: list[Asset], bar_count: int,
                 frequency: datetime.timedelta | Period = datetime.timedelta(days=1),
                 fields: list[str] | None=None,
                 data_source: str | None = None
@@ -346,7 +346,7 @@ class BarData:
         if data_source is None:
             data_source = self.default_data_source.name
 
-        df = self.data_sources[data_source].get_data_by_limit(assets=assets,
+        df = await self.data_sources[data_source].get_data_by_limit(assets=assets,
                                                          end_date=self._get_current_minute(),
                                                          limit=bar_count,
                                                          frequency=frequency,

@@ -169,7 +169,7 @@ class DataBundle(DataSource):
             date_to=end_date)
 
     # @lru_cache(maxsize=100)
-    def get_data_by_limit(self, fields: frozenset[str] | None,
+    async def get_data_by_limit(self, fields: frozenset[str] | None,
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta | Period,

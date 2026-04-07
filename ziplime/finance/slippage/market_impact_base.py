@@ -64,7 +64,7 @@ class MarketImpactBase(SlippageModel):
         """
         raise NotImplementedError("get_simulated_impact")
 
-    def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
+    async def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
         if order.open_amount == 0:
             return None, None
 

@@ -2,9 +2,11 @@ import datetime
 from functools import lru_cache
 from typing import Literal
 
+import aiocache
 import polars as pl
 import uuid
 
+from aiocache import Cache
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.entities.asset import Asset
@@ -132,7 +134,7 @@ class SimulationExchange(Exchange):
         for asset, asset_orders in orders.items():
             slippage = self.get_slippage_model(asset=asset)
 
-            for order, txn in slippage.simulate(exchange=self, assets=frozenset({asset}),
+            async for order, txn in slippage.simulate(exchange=self, assets=frozenset({asset}),
                                                 orders_for_asset=asset_orders.values(),
                                                 current_dt=current_dt,
                                                 same_bar_execution=same_bar_execution,
@@ -202,7 +204,7 @@ class SimulationExchange(Exchange):
         )
 
     # @lru_cache(maxsize=100)
-    def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime):
+    async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None):
         data = {}
         # print(f"Getting current: {assets}, fields={fields}, dt={dt}")
         # TODO: check this, uncomment adjust_minutes
@@ -214,7 +216,7 @@ class SimulationExchange(Exchange):
         #     frequency=self.data_source.frequency
         # )
 
-        return self.get_data_by_limit(
+        return await self.get_data_by_limit(
             fields=fields,
             limit=1,
             end_date=dt,
@@ -224,8 +226,8 @@ class SimulationExchange(Exchange):
         )
         # return df_raw
 
-    @lru_cache(maxsize=100)
-    def get_data_by_period(self,
+    @aiocache.cached(cache=Cache.MEMORY)
+    async def get_data_by_period(self,
                            fields: frozenset[str],
                           start_date: datetime.datetime,
                           end_date: datetime.datetime,
@@ -234,7 +236,7 @@ class SimulationExchange(Exchange):
                           include_end_date: bool,
                           source: str
                           ) -> pl.DataFrame:
-        return self.data_source.get_data_by_limit(fields=fields,
+        return await self.data_source.get_data_by_limit(fields=fields,
                                                   limit=limit,
                                                   end_date=end_date,
                                                   frequency=frequency,
@@ -242,15 +244,15 @@ class SimulationExchange(Exchange):
                                                   include_end_date=include_end_date,
                                                   )
 
-    @lru_cache(maxsize=100)
-    def get_data_by_limit(self, fields: frozenset[str],
+    @aiocache.cached(cache=Cache.MEMORY)
+    async def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta | Period,
                           assets: frozenset[Asset],
                           include_end_date: bool,
                           ) -> pl.DataFrame:
-        return self.data_source.get_data_by_limit(fields=fields,
+        return await self.data_source.get_data_by_limit(fields=fields,
                                                   limit=limit,
                                                   end_date=end_date,
                                                   frequency=frequency,

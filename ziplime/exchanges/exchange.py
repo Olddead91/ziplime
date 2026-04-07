@@ -117,9 +117,9 @@ class Exchange(DataSource):
     async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str): ...
 
     @abstractmethod
-    def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime): ...
+    async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None): ...
 
-    def get_data_by_limit(self, fields: frozenset[str],
+    async def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta,

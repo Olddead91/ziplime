@@ -475,7 +475,7 @@ class LimeTraderSdkExchange(Exchange):
     async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str):
         ...
 
-    def get_data_by_limit(self, fields: frozenset[str],
+    async def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta,
@@ -522,5 +522,5 @@ class LimeTraderSdkExchange(Exchange):
             dfs.append(df)
         return pd.concat(dfs, axis=1)
 
-    def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime):
+    async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime):
         return self.get_spot_value(assets=assets, fields=fields, dt=dt, data_frequency=None)

@@ -13,13 +13,11 @@ import polars as pl
 from ziplime.data.services.data_bundle_source import DataBundleSource
 
 fundamental_data_fields = [
-
     "total_share_holder_equity",
     "total_liabilities",
     "total_assets",
     "shares_outstanding",
     "operating_income",
-
     "roi",
     "roe",
     "roa",

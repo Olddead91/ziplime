@@ -31,8 +31,6 @@ from ziplime.utils.compat import consistent_round
 class ExecutionStyle(metaclass=abc.ABCMeta):
     """Base class for order execution styles."""
 
-    _exchange = None
-
     @abc.abstractmethod
     def get_limit_price(self, is_buy):
         """
@@ -49,19 +47,11 @@ class ExecutionStyle(metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    @property
-    def exchange(self):
-        """
-        The exchange to which this order should be routed.
-        """
-        return self._exchange
-
     def to_order_type(self) -> OrderType:
         raise NotImplementedError("to_order_type not implemented for ExecutionStyle")
 
     async def to_order_request(self, base_asset: Asset, quote_asset: Asset,
                                quantity: int,
-                               exchange_name: str,
                                creation_dt: datetime.datetime,
                                ): ...
 
@@ -73,9 +63,8 @@ class MarketOrder(ExecutionStyle):
     This is the default for orders placed with :func:`~ziplime.api.order`.
     """
 
-    def __init__(self, same_day_execution: bool = True, exchange=None):
+    def __init__(self, same_day_execution: bool = True):
         self.same_day_execution = same_day_execution
-        self._exchange = exchange
 
     def get_limit_price(self, is_buy: bool):
         return None
@@ -88,17 +77,14 @@ class MarketOrder(ExecutionStyle):
 
     async def to_order_request(self, base_asset: Asset, quote_asset: Asset,
                                quantity: int,
-                               exchange_name: str,
                                creation_dt: datetime.datetime,
                                ) -> MarketOrderRequest:
         order_req = MarketOrderRequest(
             order_id=uuid.uuid4().hex,
             trading_pair=TradingPair(base_asset=base_asset,
-                                     quote_asset=quote_asset,
-                                     exchange_name=exchange_name),
+                                     quote_asset=quote_asset),
             order_side=OrderSide.BUY if quantity > 0 else OrderSide.SELL,
             quantity=float(quantity),
-            exchange_name=exchange_name,
             creation_date=creation_dt
         )
         return order_req
@@ -119,18 +105,17 @@ class LimitOrder(ExecutionStyle):
         should be filled.
     """
 
-    def __init__(self, limit_price, asset=None, exchange=None):
+    def __init__(self, limit_price: float, tick_size: float = 0.01):
         check_stoplimit_prices(price=limit_price, label="limit")
 
         self.limit_price = limit_price
-        self._exchange = exchange
-        self.asset = asset
+        self.tick_size = tick_size
 
     def get_limit_price(self, is_buy):
         return asymmetric_round_price(
             self.limit_price,
             is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=self.tick_size,
         )
 
     def get_stop_price(self, is_buy):
@@ -156,12 +141,11 @@ class StopOrder(ExecutionStyle):
         the order will be placed if market price rises above this value.
     """
 
-    def __init__(self, stop_price, asset=None, exchange=None):
+    def __init__(self, stop_price: float, tick_size: float = 0.01):
         check_stoplimit_prices(price=stop_price, label="stop")
 
         self.stop_price = stop_price
-        self._exchange = exchange
-        self.asset = asset
+        self.tick_size = tick_size
 
     def get_limit_price(self, _is_buy):
         return None
@@ -170,7 +154,7 @@ class StopOrder(ExecutionStyle):
         return asymmetric_round_price(
             self.stop_price,
             not is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=self.tick_size,
         )
 
     def to_order_type(self) -> OrderType:
@@ -196,27 +180,26 @@ class StopLimitOrder(ExecutionStyle):
         the order will be placed if market price rises above this value.
     """
 
-    def __init__(self, limit_price, stop_price, asset=None, exchange=None):
+    def __init__(self, limit_price: float, stop_price: float, tick_size: float=0.01):
         check_stoplimit_prices(price=limit_price, label="limit")
         check_stoplimit_prices(price=stop_price, label="stop")
 
         self.limit_price = limit_price
         self.stop_price = stop_price
-        self._exchange = exchange
-        self.asset = asset
+        self.tick_size = tick_size
 
     def get_limit_price(self, is_buy):
         return asymmetric_round_price(
             self.limit_price,
             is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=self.tick_size,
         )
 
     def get_stop_price(self, is_buy):
         return asymmetric_round_price(
             self.stop_price,
             not is_buy,
-            tick_size=(0.01 if self.asset is None else self.asset.tick_size),
+            tick_size=self.tick_size,
         )
 
     def to_order_type(self) -> OrderType:

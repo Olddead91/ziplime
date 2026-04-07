@@ -31,14 +31,17 @@ async def initialize(context):
 
 async def handle_data(context, data):
     asset = context.asset
-    df = data.history(assets=[asset], fields=["close"], bar_count=context.long_window)
+    df = await data.history(assets=[asset], fields=["close"], bar_count=context.long_window)
     prices = df["close"].to_numpy()
 
     current_amount = getattr(context.portfolio.positions.get(asset, 0), 'amount', 0)
 
-    order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())
 
+    order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())
     order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
+
+
+    # order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
     # if order_buy:
     #     print(f"[{context.simulation_dt}]Buy order, quantity={order_buy.amount},  status={order_buy.status}, cash={context.portfolio.cash}")
     # if order_sell:

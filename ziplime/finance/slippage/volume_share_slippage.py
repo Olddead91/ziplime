@@ -55,7 +55,7 @@ class VolumeShareSlippage(SlippageModel):
             price_impact=self.price_impact,
         )
 
-    def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
+    async def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
         volume = data.current(order.asset, "volume")
 
         max_volume = self.volume_limit * volume

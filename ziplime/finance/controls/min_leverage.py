@@ -23,7 +23,7 @@ class MinLeverage(AccountControl):
         self.min_leverage = min_leverage
         self.deadline = deadline
 
-    def validate(self, _portfolio, account, algo_datetime, _algo_current_data):
+    async def validate(self, _portfolio, account, algo_datetime, _algo_current_data):
         """Make validation checks if we are after the deadline.
         Fail if the leverage is less than the min leverage.
         """

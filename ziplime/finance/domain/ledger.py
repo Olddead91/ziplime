@@ -46,7 +46,9 @@ class Ledger:
 
     def __init__(self, trading_sessions: pd.DatetimeIndex,
                  exchanges: dict[str, Exchange],
-                 data_frequency: datetime.timedelta):
+                 default_exchange: Exchange,
+                 data_frequency: datetime.timedelta,
+                 ):
         if len(trading_sessions):
             start = trading_sessions[0]
         else:
@@ -55,18 +57,7 @@ class Ledger:
         # through ``self._dirty_portfolio``
         self.__dirty_portfolio = False
 
-        first_exchange = exchanges[list(exchanges.keys())[0]]
-        self.default_exchange = first_exchange
-        self._portfolio = Portfolio(start_date=start,
-                                    starting_cash=self.default_exchange.get_start_cash_balance(),
-                                    portfolio_value=self.default_exchange.get_start_cash_balance(),
-                                    cash=self.default_exchange.get_current_cash_balance(),
-                                    cash_flow=0.00,
-                                    pnl=0.00,
-                                    returns=0.00,
-                                    positions_value=0.00,
-                                    positions_exposure=0.00,
-                                    )
+        self.default_exchange = default_exchange
 
         self.logger = structlog.get_logger(__name__)
 
@@ -82,6 +73,17 @@ class Ledger:
 
         # this is a component of the cache key for the account
         self._position_stats = None
+        start_cash = sum(exchange.get_start_cash_balance() for exchange in exchanges.values())
+        self._portfolio = Portfolio(start_date=start,
+                                    starting_cash=start_cash,
+                                    portfolio_value=start_cash,
+                                    cash=start_cash,
+                                    cash_flow=0.00,
+                                    pnl=0.00,
+                                    returns=0.00,
+                                    positions_value=0.00,
+                                    positions_exposure=0.00,
+                                    )
 
         # Have some fields of the account changed?
         self._dirty_account = True

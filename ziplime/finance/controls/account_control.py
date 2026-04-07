@@ -15,7 +15,7 @@ class AccountControl(metaclass=abc.ABCMeta):
         self.__fail_args = kwargs
 
     @abc.abstractmethod
-    def validate(self, _portfolio, _account, _algo_datetime, _algo_current_data):
+    async def validate(self, _portfolio, _account, _algo_datetime, _algo_current_data):
         """On each call to handle data by TradingAlgorithm, this method should be
         called *exactly once* on each registered AccountControl object.
 

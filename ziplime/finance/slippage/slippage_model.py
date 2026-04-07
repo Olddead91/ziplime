@@ -69,7 +69,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
         return self._volume_for_bar
 
     @abstractmethod
-    def process_order(self, exchange: Exchange, dt: datetime.datetime, order, price: float = None):
+    async def process_order(self, exchange: Exchange, dt: datetime.datetime, order, price: float = None):
         """Compute the number of shares and price to fill for ``order`` in the
         current minute.
 
@@ -107,10 +107,10 @@ class SlippageModel(metaclass=FinancialModelMeta):
         """
         raise NotImplementedError("process_order")
 
-    def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime,
+    async def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime,
                  same_bar_execution: bool, price_used_in_order_execution: Literal["open", "close", "low", "high"]):
         self._volume_for_bar = 0
-        current_val = exchange.current(assets=assets, fields=frozenset({"volume", price_used_in_order_execution}),
+        current_val = await exchange.current(assets=assets, fields=frozenset({"volume", price_used_in_order_execution}),
                                        dt=current_dt)
 
         volume_s = current_val["volume"]
@@ -148,7 +148,7 @@ class SlippageModel(metaclass=FinancialModelMeta):
             txn = None
 
             try:
-                execution_price, execution_volume = self.process_order(exchange=exchange, dt=current_dt, order=order,
+                execution_price, execution_volume = await self.process_order(exchange=exchange, dt=current_dt, order=order,
                                                                        price=price
                                                                        )
 

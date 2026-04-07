@@ -13,7 +13,7 @@ class MaxOrderCount(TradingControl):
         self.max_count = max_count
         self.current_date = None
 
-    def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
+    async def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
         """Fail if we've already placed self.max_count orders today."""
         algo_date = algo_datetime.date()
 

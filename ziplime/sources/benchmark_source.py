@@ -24,6 +24,7 @@ class BenchmarkSource:
             exchange: Exchange,
             emission_rate: datetime.timedelta,
             benchmark_fields: frozenset[str],
+            precalculated_series: pl.Series,
             benchmark_asset: Asset | None = None,
             benchmark_returns: pl.Series | None = None,
     ):
@@ -33,28 +34,7 @@ class BenchmarkSource:
         self.emission_rate = emission_rate
         self.exchange = exchange
         self.benchmark_fields = benchmark_fields
-        if len(sessions) == 0:
-            self._precalculated_series = pl.Series()
-
-        elif benchmark_asset is not None:
-            self._precalculated_series = self._initialize_precalculated_series(
-                asset=benchmark_asset, trading_calendar=trading_calendar, trading_days=sessions,
-                exchange=exchange
-            )
-        elif benchmark_returns is not None:
-            all_bars = pl.from_pandas(
-                trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(trading_calendar.tz)
-            )
-            self._precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
-                index_column="date", every=self.emission_rate
-            ).agg(pl.col("close").sum())
-        else:
-            all_bars = pl.from_pandas(
-                trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(trading_calendar.tz)
-            )
-            self._precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
-                index_column="date", every=self.emission_rate
-            ).agg(pl.col("close").sum())
+        self._precalculated_series = precalculated_series
 
     def get_value(self, dt: datetime.datetime) -> pd.Series:
         """Look up the returns for a given dt.
@@ -180,64 +160,3 @@ class BenchmarkSource:
         daily_returns.index = closes.index
         return daily_returns.iloc[1:]
 
-    def _initialize_precalculated_series(
-            self, asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
-            exchange: Exchange
-    ):
-        """
-        Internal method that pre-calculates the benchmark return series for
-        use in the simulation.
-
-        Parameters
-        ----------
-        asset:  Asset to use
-
-        trading_calendar: TradingCalendar
-
-        trading_days: pd.DateTimeIndex
-
-        exchange: Exchange
-
-        Notes
-        -----
-        If the benchmark asset started trading after the simulation start,
-        or finished trading before the simulation end, exceptions are raised.
-
-        If the benchmark asset started trading the same day as the simulation
-        start, the first available minute price on that day is used instead
-        of the previous close.
-
-        We use history to get an adjusted price history for each day's close,
-        as of the look-back date (the last day of the simulation).  Prices are
-        fully adjusted for dividends, splits, and mergers.
-
-        Returns
-        -------
-        returns : pd.Series
-            indexed by trading day, whose values represent the %
-            change from close to close.
-        daily_returns : pd.Series
-            the partial daily returns for each minute
-        """
-        all_bars: pl.Series = pl.from_pandas(
-            trading_calendar.sessions_minutes(start=self.sessions[0], end=self.sessions[-1]).tz_convert(
-                trading_calendar.tz)
-        )  # .to_frame("date").group_by_dynamic(
-        #     index_column="date", every=self.emission_rate
-        # ).agg()["date"]
-        limit = all_bars.to_frame("date").group_by_dynamic(
-            index_column="date", every=self.emission_rate
-        ).agg()["date"].len()
-        # precalculated_series = pl.DataFrame({"date": all_bars, "value": 0.00}).group_by_dynamic(
-        #     index_column="date", every=self.timedelta_period
-        # ).agg(pl.col("value").sum())
-
-        benchmark_series = self.exchange.get_data_by_limit(
-            fields=self.benchmark_fields,
-            limit=limit,
-            frequency=self.emission_rate,
-            end_date=all_bars[-1],
-            assets=frozenset({asset}),
-            include_end_date=True
-        )
-        return benchmark_series.with_columns(pl.col(self.benchmark_fields).pct_change().alias("pct_change"))  # [1:]

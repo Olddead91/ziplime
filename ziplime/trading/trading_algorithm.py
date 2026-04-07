@@ -10,6 +10,7 @@ import warnings
 from typing import Callable, Literal
 import pandas as pd
 import structlog
+from pygments.styles import default
 
 import ziplime
 from itertools import chain, repeat
@@ -23,6 +24,7 @@ from ziplime.constants.logging_event import LoggingEvent, LoggingEvent
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.data_source import DataSource
 from ziplime.domain.bar_data import BarData
+from ziplime.domain.portfolio import Portfolio
 from ziplime.finance.blotter.blotter import Blotter
 from ziplime.finance.controls.long_only import LongOnly
 from ziplime.finance.controls.max_order_count import MaxOrderCount
@@ -195,6 +197,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             create_event_context=None,
             stop_on_error: bool = False,
             same_bar_execution: bool = True,
+
     ):
         self.algorithm = algorithm
         self.config = algorithm.config
@@ -253,7 +256,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         self.event_manager = EventManager(create_event_context)
 
         self._handle_data = None
+
         self._ledger = Ledger(trading_sessions=clock.sessions, exchanges=exchanges,
+                              default_exchange=self.default_exchange,
                               data_frequency=clock.emission_rate)
 
         self._initialize = algorithm.initialize
@@ -276,7 +281,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # TODO: what if we add funds?
         for exchange in exchanges.values():
             data_sources[exchange.name] = exchange
-            if exchange.get_start_cash_balance() <= 0:
+            start_cash_balance = exchange.get_start_cash_balance()
+            if start_cash_balance <= 0:
                 raise ZeroCapitalError()
 
         # Prepare the algo for initialization
@@ -771,7 +777,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name or self.default_exchange.name
         )
 
-    def _calculate_order_value_amount(self, asset: Asset, value: float, exchange_name: str):
+    async def _calculate_order_value_amount(self, asset: Asset, value: float, exchange_name: str):
         """Calculates how many shares/contracts to order based on the type of
         asset being ordered.
         """
@@ -790,9 +796,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             )
         else:
             # last_price = self.current_data.current([asset], fields={"price"})["price"][0]
-            last_price_data = self.exchanges[exchange_name].current(frozenset({asset}),
-                                                                    dt=self.simulation_dt,
-                                                                    fields=frozenset({"price"}))["price"]
+            last_price_data = (await self.exchanges[exchange_name].current(frozenset({asset}),
+                                                                           dt=self.simulation_dt,
+                                                                           fields=frozenset({"price"})))["price"]
             if len(last_price_data) == 0:
                 # if last_price is None:
                 raise CannotOrderDelistedAsset(
@@ -912,7 +918,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange = self.default_exchange
         else:
             exchange = self.exchanges[exchange_name]
-        order_id = None
+        order_id = uuid.uuid4().hex[:20]
+
         order_qty_rounded = int(round_if_near_integer(amount))
 
         order = Order(
@@ -1047,8 +1054,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        amount = self._calculate_order_value_amount(asset=asset, value=value,
-                                                    exchange_name=exchange_name or self.default_exchange.name)
+        amount = await self._calculate_order_value_amount(asset=asset, value=value,
+                                                          exchange_name=exchange_name or self.default_exchange.name)
         return await self.order(
             asset,
             amount,
@@ -1293,8 +1300,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset=asset):
             return None
 
-        amount = self._calculate_order_percent_amount(asset=asset, percent=percent,
-                                                      exchange_name=exchange_name or self.default_exchange.name)
+        amount = await self._calculate_order_percent_amount(asset=asset, percent=percent,
+                                                            exchange_name=exchange_name or self.default_exchange.name)
         return await self.order(
             asset=asset,
             amount=amount,
@@ -1302,8 +1309,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    def _calculate_order_percent_amount(self, asset: Asset, percent: float, exchange_name: str,
-                                        reserved_percentage_for_fees: float = 0.00):
+    async def _calculate_order_percent_amount(self, asset: Asset, percent: float, exchange_name: str,
+                                              reserved_percentage_for_fees: float = 0.00):
         # value = self.portfolio.portfolio_value * percent
         # return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
 
@@ -1313,18 +1320,19 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         exchange = self.exchanges[exchange_name]
         value = self.portfolio.portfolio_value * percent
 
-        requested_quantity = self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
+        requested_quantity = await self._calculate_order_value_amount(asset=asset, value=value,
+                                                                      exchange_name=exchange_name)
         commission = exchange.get_commission_model(asset=asset)
         slippage = exchange.get_slippage_model(asset=asset)
         projected_commission = commission.calculate_for_asset(asset=asset, quantity=requested_quantity)
-        new_quantity = self._calculate_order_value_amount(asset=asset, value=value - projected_commission,
-                                                          exchange_name=exchange_name)
+        new_quantity = await self._calculate_order_value_amount(asset=asset, value=value - projected_commission,
+                                                                exchange_name=exchange_name)
         # return new_quantity
-        estimated_price, estimated_quantity = slippage.order_target_percentage_maximum_quantity(asset=asset,
-                                                                                                exchange=exchange,
-                                                                                                percentage=percent,
-                                                                                                available_cash=value,
-                                                                                                dt=self.simulation_dt)
+        estimated_price, estimated_quantity = await slippage.order_target_percentage_maximum_quantity(asset=asset,
+                                                                                                      exchange=exchange,
+                                                                                                      percentage=percent,
+                                                                                                      available_cash=value,
+                                                                                                      dt=self.simulation_dt)
         # print(
         #     f"[{self.simulation_dt}] Calculating PRICE FOR handle_data ({estimated_quantity} * {estimated_price})={estimated_quantity * estimated_price}, price_with_slippage={estimated_price} cash_before={self.portfolio.cash}")
         return min(estimated_quantity, new_quantity)
@@ -1522,9 +1530,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        target_amount = self._calculate_order_percent_amount(asset=asset, percent=target,
-                                                             exchange_name=exchange_name or self.default_exchange.name,
-                                                             reserved_percentage_for_fees=reserved_percentage_for_fees)
+        target_amount = await self._calculate_order_percent_amount(asset=asset, percent=target,
+                                                                   exchange_name=exchange_name or self.default_exchange.name,
+                                                                   reserved_percentage_for_fees=reserved_percentage_for_fees)
         amount = self._calculate_order_target_amount(asset=asset, target=target_amount)
 
         return await self.order(
@@ -1685,9 +1693,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             raise RegisterAccountControlPostInit()
         self.account_controls.append(control)
 
-    def validate_account_controls(self):
+    async def validate_account_controls(self):
         for control in self.account_controls:
-            control.validate(
+            await control.validate(
                 self.portfolio,
                 self.account,
                 self.simulation_dt,
@@ -2197,13 +2205,14 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                         self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
                         self.execute_order_cancellation_policy()
-                        self.validate_account_controls()
+                        await self.validate_account_controls()
 
                         if self.clock.emission_rate == datetime.timedelta(days=1):
                             # this method is called for both minutely and daily emissions, but
                             # this chunk of code here only applies for daily emissions. (since
                             # it's done every minute, elsewhere, for minutely emission).
-                            await self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)  # TODO : remove
+                            await self._ledger.sync_last_sale_prices(dt=dt,
+                                                                     handle_non_market_minutes=False)  # TODO : remove
                             await self._sync_last_sale_prices(dt=dt)
                             await self._ledger.update_portfolio()
                             self._ledger.update_account()
@@ -2221,6 +2230,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                         self.before_trading_start(data=self.current_data)
                     elif action == SimulationEvent.EMISSION_RATE_END and self.clock.emission_rate == datetime.timedelta(
                             minutes=1):
+                        await self._ledger.sync_last_sale_prices(dt=dt, handle_non_market_minutes=False)
+
                         minute_msg = self._get_minute_message(
                             dt=dt,
                         )

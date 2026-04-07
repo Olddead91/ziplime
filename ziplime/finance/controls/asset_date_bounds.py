@@ -9,7 +9,7 @@ class AssetDateBounds(TradingControl):
     def __init__(self, on_error):
         super(AssetDateBounds, self).__init__(on_error)
 
-    def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
+    async def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
         """Fail if the algo has passed this Asset's end_date, or before the
         Asset's start date.
         """

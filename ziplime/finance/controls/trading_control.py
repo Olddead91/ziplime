@@ -19,7 +19,7 @@ class TradingControl(metaclass=abc.ABCMeta):
         self._logger = structlog.get_logger(__name__)
 
     @abc.abstractmethod
-    def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
+    async def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
         """Before any order is executed by TradingAlgorithm, this method should be
         called *exactly once* on each registered TradingControl object.
 

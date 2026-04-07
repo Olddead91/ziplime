@@ -86,7 +86,7 @@ class DataSource:
                 index_column="date", every=frequency, by="sid").agg(pl.col(field).last() for field in fields)
         return df.sort(by="date")
 
-    def get_data_by_limit(self, fields: frozenset[str] | None,
+    async def get_data_by_limit(self, fields: frozenset[str] | None,
                           limit: int,
                           end_date: datetime.datetime,
                           frequency: datetime.timedelta | Period,

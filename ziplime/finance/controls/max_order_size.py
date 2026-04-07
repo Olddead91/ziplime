@@ -24,7 +24,7 @@ class MaxOrderSize(TradingControl):
         if max_notional and max_notional < 0:
             raise ValueError("max_notional must be positive.")
 
-    def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
+    async def validate(self, asset, amount, portfolio, algo_datetime, algo_current_data):
         """Fail if the magnitude of the given order exceeds either self.max_shares
         or self.max_notional.
         """
@@ -35,7 +35,7 @@ class MaxOrderSize(TradingControl):
         if self.max_shares is not None and abs(amount) > self.max_shares:
             self.handle_violation(asset, amount, algo_datetime)
 
-        current_asset_price = algo_current_data.current(asset, "price")
+        current_asset_price = await algo_current_data.current(asset, "price")
         order_value = amount * current_asset_price
 
         too_much_value = (

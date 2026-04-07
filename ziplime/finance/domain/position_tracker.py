@@ -413,7 +413,7 @@ class PositionTracker:
         for outer_position in self.positions.values():
             inner_position = outer_position
 
-            last_sale_price = get_price(inner_position.asset)["close"][0]
+            last_sale_price = (await get_price(inner_position.asset))["close"][0]
             print(f"Last sale price for {inner_position.asset.asset_name} is {last_sale_price} at {dt}")
             # inline ~isnan because this gets called once per position per minute
             if last_sale_price is None:
