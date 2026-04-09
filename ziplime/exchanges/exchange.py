@@ -43,15 +43,15 @@ class Exchange(DataSource):
         return []
 
     @abstractmethod
-    def get_positions(self) -> dict[Asset, Position]:
+    async def get_positions(self) -> dict[Asset, Position]:
         ...
 
     @abstractmethod
-    def get_portfolio(self) -> Portfolio:
+    async def get_portfolio(self) -> Portfolio:
         ...
 
     @abstractmethod
-    def get_account(self) -> Account:
+    async def get_account(self) -> Account:
         ...
 
     @abstractmethod
@@ -66,7 +66,7 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    def get_orders(self) -> dict[str, Order]:
+    async def get_orders(self) -> dict[str, Order]:
         ...
 
     @abstractmethod
@@ -83,7 +83,7 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    def cancel_order(self, order_id: str) -> None:
+    async def cancel_order(self, order_id: str) -> None:
         ...
 
     @abstractmethod
@@ -91,7 +91,7 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    def get_spot_value(self, assets, field, dt, data_frequency):
+    async def get_spot_value(self, assets, field, dt, data_frequency):
         ...
 
     @abstractmethod

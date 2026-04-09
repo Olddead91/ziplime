@@ -16,6 +16,7 @@ class InMemoryBlotter(Blotter):
             self,
             exchanges: dict[str, Exchange],
             cancel_policy,
+            new_orders: dict = None
     ):
         super().__init__(cancel_policy=cancel_policy)
         self._logger = structlog.get_logger(__name__)
@@ -25,7 +26,7 @@ class InMemoryBlotter(Blotter):
         # keep a dict of orders by their own id
         self.orders = {exchange.name: {} for exchange in exchanges.values()}
         # holding orders that have come in since the last event.
-        self.new_orders = OrderedDict()
+        self.new_orders = new_orders or OrderedDict()
 
         self.max_shares = int(1e11)
 

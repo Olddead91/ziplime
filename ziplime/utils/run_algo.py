@@ -217,6 +217,13 @@ async def _prepare_algorithm(
         same_bar_execution=same_bar_execution,
     )
 
+    orders_by_exchange = {}
+    for exchange in exchanges:
+        exchange_orders = await exchange.get_orders()
+        orders_by_exchange[exchange.name] =exchange_orders
+        for order in exchange_orders.values():
+            tr.new_order_submitted(order=order)
+
     if max_leverage is not None:
         max_leverage = MaxLeverage(max_leverage, fail_on_error=False)
         tr.register_account_control(control=max_leverage)

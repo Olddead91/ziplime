@@ -29,9 +29,11 @@ async def initialize(context):
     context.long_window = 200
 
 
-async def handle_data(context, data):
+async def handle_data(context:TradingAlgorithm, data: BarData):
     asset = context.asset
     df = await data.history(assets=[asset], fields=["close"], bar_count=context.long_window)
+    df = await data.current(assets=[asset], fields=["close"])
+
     prices = df["close"].to_numpy()
 
     current_amount = getattr(context.portfolio.positions.get(asset, 0), 'amount', 0)

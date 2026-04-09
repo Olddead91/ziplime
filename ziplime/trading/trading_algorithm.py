@@ -402,50 +402,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         await self.metrics_tracker.handle_start_of_simulation()
         return self.transform()
 
-    # async def run(self):
-    #     """Run the algorithm."""
-    #     self._logger.info("Running algorithm")
-    #     # HACK: I don't think we really want to support passing a data portal
-    #     # this late in the long term, but this is needed for now for backwards
-    #     # compat downstream.
-    #
-    #     # Create ziplime and loop through simulated_trading.
-    #     # Each iteration returns a perf dictionary
-    #     try:
-    #         perfs = []
-    #         errors = []
-    #         async for perf, errors in await self.get_generator():
-    #             perfs.append(perf)
-    #
-    #         # convert perf dict to pandas dataframe
-    #         daily_stats = self._create_daily_stats(perfs)
-    #
-    #         self.analyze(daily_stats)
-    #     finally:
-    #         self.data_portal = None
-    #         self.metrics_tracker = None
-    #
-    #     return daily_stats, errors
-
-    # def _create_daily_stats(self, perfs):
-    #     # create daily and cumulative stats dataframe
-    #     daily_perfs = []
-    #     # TODO: the loop here could overwrite expected properties
-    #     # of daily_perf. Could potentially raise or log a
-    #     # warning.
-    #     for perf in perfs:
-    #         if "daily_perf" in perf:
-    #             perf["daily_perf"].update(perf["daily_perf"].pop("recorded_vars"))
-    #             perf["daily_perf"].update(perf["cumulative_risk_metrics"])
-    #             daily_perfs.append(perf["daily_perf"])
-    #         else:
-    #             self.risk_report = perf
-    #
-    #     daily_dts = pd.DatetimeIndex([p["period_close"] for p in daily_perfs])
-    #     daily_dts = make_utc_aware(daily_dts)
-    #     daily_stats = pd.DataFrame(daily_perfs, index=daily_dts)
-    #     return daily_stats
-
     def calculate_capital_changes(
             self, dt: datetime.datetime, emission_rate: datetime.timedelta, is_interday: bool,
             portfolio_value_adjustment: float = 0.00
@@ -1100,14 +1056,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # self._sync_last_sale_prices()
         return self._ledger.account
 
-    # def on_dt_changed(self, dt):
-    #     """Callback triggered by the simulation loop whenever the current dt
-    #     changes.
-    #
-    #     Any logic that should happen exactly once at the start of each datetime
-    #     group should happen here.
-    #     """
-    #     self.datetime = dt
 
     @api_method
     def get_datetime(self):
@@ -1542,29 +1490,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    # def _calculate_order_target_percent_amount(self, asset, target):
-    #     target_amount = self._calculate_order_percent_amount(asset, target)
-    #     return self._calculate_order_target_amount(asset, target_amount)
-
-    # @api_method
-    # def batch_market_order(self, share_counts):
-    #     """Place a batch market order for multiple assets.
-    #
-    #     Parameters
-    #     ----------
-    #     share_counts : pd.Series[Asset -> int]
-    #         Map from asset to number of shares to order for that asset.
-    #
-    #     Returns
-    #     -------
-    #     order_ids : pd.Index[str]
-    #         Index of ids for newly-created orders.
-    #     """
-    #     style = MarketOrder()
-    #     order_args = [
-    #         (asset, amount, style) for (asset, amount) in share_counts.items() if amount
-    #     ]
-    #     return self.blotter.batch_order(order_args)
 
     @api_method
     def get_open_orders(self, asset=None):
@@ -1597,7 +1522,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         return []
 
     @api_method
-    def get_order(self, order_id) -> Order | None:
+    def get_order(self, order_id: str, exchange_name: str) -> Order | None:
         """Lookup an order based on the order id returned from one of the
         order functions.
 
@@ -1611,11 +1536,11 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         order : Order
             The order object.
         """
-        self.exchange.get_orders_by_ids([order_id])
-        return self.blotter.get_order_by_id(order_id=order_id)
+        # await self.exchanges[exchange_name].get_orders_by_ids([order_id])
+        return self.blotter.get_order_by_id(order_id=order_id, exchange_name=exchange_name)
 
     @api_method
-    def cancel_order(self, order_id: str, relay_status: bool = True) -> None:
+    async def cancel_order(self, order_id: str, exchange_name: str, relay_status: bool = True) -> None:
         """Cancel an open order.
 
         Parameters
@@ -1623,7 +1548,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         order_param : str or Order
             The order_id or order object to cancel.
         """
-        order = self.blotter.get_order_by_id(order_id=order_id)
+        order = self.blotter.get_order_by_id(order_id=order_id, exchange_name=exchange_name)
         if order is None or not order.open:
             return
         order.cancel()
@@ -1632,18 +1557,19 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # along with newly placed orders.
 
         self.blotter.order_cancelled(order=order)
-        self.exchange.cancel_order(order_id=order_id)
+        await self.exchanges[exchange_name].cancel_order(order_id=order.exchange_order_id)
         if relay_status:
             self.new_orders[order.id] = order
         else:
             self.new_orders.pop(order.id, None)
 
-    def cancel_all_orders_for_asset(self, asset: Asset, warn: bool = False, relay_status: bool = True):
+    async def cancel_all_orders_for_asset(self, asset: Asset, exchange_name: str, warn: bool = False,
+                                          relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """
         # (sadly) open_orders is a defaultdict, so this will always succeed.
-        orders = self.blotter.get_open_orders_by_asset(asset=asset)
+        orders = self.blotter.get_open_orders_by_asset(asset=asset, exchange_name=exchange_name)
         if not orders:
             return
         # We're making a copy here because `cancel` mutates the list of open
@@ -1651,7 +1577,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # self.open_orders no longer a defaultdict.  If we do that, then we
         # should just remove the orders once here and be done with the matter.
         for order_id, order in orders.items():
-            self.cancel_order(order_id=order.id, relay_status=relay_status)
+            await self.cancel_order(order_id=order.id, exchange_name=order.exchange_name, relay_status=relay_status)
             if warn:
                 # Message appropriately depending on whether there's
                 # been a partial fill or not.
@@ -1679,7 +1605,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                         f"{order.asset.sid} failed to fill by the end of day "
                         f"and was canceled."
                     )
-        self.blotter.cancel_all_orders_for_asset(asset=asset, relay_status=relay_status)
+        self.blotter.cancel_all_orders_for_asset(asset=asset, exchange_name=exchange_name, relay_status=relay_status)
 
     ####################
     # Account Controls #
@@ -2202,7 +2128,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                         await self._sync_last_sale_prices(dt=dt)
                         await self._ledger.update_portfolio()
                         self._ledger.update_account()
-                        self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
+                        await self._cleanup_expired_assets(dt=dt, position_assets=position_assets)
 
                         self.execute_order_cancellation_policy()
                         await self.validate_account_controls()
@@ -2251,7 +2177,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             risk_message = self.metrics_tracker.handle_simulation_end()
             yield risk_message, errors
 
-    def _cleanup_expired_assets(self, dt: datetime.datetime, position_assets):
+    async def _cleanup_expired_assets(self, dt: datetime.datetime, position_assets):
         """
         Clear out any assets that have expired before starting a new sim day.
 
@@ -2291,7 +2217,8 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         ]
 
         for asset in assets_to_cancel:
-            self.cancel_all_orders_for_asset(asset=asset)
+            for exchange in self.exchanges:
+                await self.cancel_all_orders_for_asset(asset=asset, exchange_name=exchange)
 
         # Make a copy here so that we are not modifying the list that is being
         # iterated over.

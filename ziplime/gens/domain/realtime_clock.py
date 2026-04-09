@@ -132,7 +132,7 @@ class RealtimeClock(TradingClock):
                 else:
                     last_bar_emit = current_time
                     self.market_closes_yielded[current_session_index] = True
-                    yield current_time.date(), SimulationEvent.SESSION_END
+                    yield current_time, SimulationEvent.SESSION_END
             else:
                 # We should never end up in this branch
                 raise RuntimeError("Invalid state in RealtimeClock")

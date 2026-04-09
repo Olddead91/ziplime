@@ -94,7 +94,7 @@ class SimulationExchange(Exchange):
         pass
 
     async def get_orders(self) -> dict[str, Order]:
-        pass
+        return {}
 
     async def get_transactions(self, orders: dict[Asset, dict[str, Order]],
                                current_dt: datetime.datetime, same_bar_execution: bool):
@@ -167,7 +167,7 @@ class SimulationExchange(Exchange):
     def get_transactions_by_order_ids(self, order_ids: list[str]):
         pass
 
-    def cancel_order(self, order_param):
+    async def cancel_order(self, order_param):
         pass
 
     def get_last_traded_dt(self, asset):
