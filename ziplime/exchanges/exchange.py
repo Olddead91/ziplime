@@ -15,6 +15,7 @@ from ziplime.finance.commission.commission_model import CommissionModel
 from ziplime.finance.domain.order import Order
 # from ziplime.finance.slippage.slippage_model import SlippageModel
 from ziplime.gens.domain.trading_clock import TradingClock
+from ziplime.constants.period import Period
 
 
 class Exchange(DataSource):
@@ -91,7 +92,7 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    async def get_spot_value(self, assets, field, dt, data_frequency):
+    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime, data_frequency: datetime.timedelta | Period = None):
         ...
 
     @abstractmethod
@@ -106,24 +107,25 @@ class Exchange(DataSource):
     def get_commission_model(self, asset: Asset) -> CommissionModel:
         ...
 
-    @abstractmethod
-    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
-                                          frequency: datetime.timedelta): ...
+    # @abstractmethod
+    # async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
+    #                                       frequency: datetime.timedelta): ...
 
-    @abstractmethod
-    def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
-                                         frequency: datetime.timedelta): ...
+    # @abstractmethod
+    # def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
+    #                                      frequency: datetime.timedelta): ...
 
-    async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str): ...
+    # @abstractmethod
+    # async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str]): ...
 
-    @abstractmethod
-    async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None): ...
+    # @abstractmethod
+    # async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None): ...
 
     async def get_data_by_limit(self, fields: frozenset[str],
-                          limit: int,
-                          end_date: datetime.datetime,
-                          frequency: datetime.timedelta,
-                          assets: frozenset[Asset],
-                          include_end_date: bool,
-                          ) -> pl.DataFrame:
+                                limit: int,
+                                end_date: datetime.datetime,
+                                frequency: datetime.timedelta,
+                                assets: frozenset[Asset],
+                                include_end_date: bool,
+                                ) -> pl.DataFrame:
         ...

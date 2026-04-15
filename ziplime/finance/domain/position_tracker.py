@@ -18,7 +18,7 @@ from ziplime.finance.finance_ext import (
     PositionStats,
     calculate_position_tracker_stats
 )
-
+import polars as pl
 
 class PositionTracker:
     """The current state of the positions held.
@@ -391,12 +391,15 @@ class PositionTracker:
     async def sync_last_sale_prices(self, dt: datetime.datetime,
                                     exchange_name: str,
                                     handle_non_market_minutes: bool = False):
+        if not self.positions:
+            return
         self._dirty_stats = True
         exchange = self.exchanges[exchange_name]
+        assets = [position.asset for position in self.positions.values()]
+
         if handle_non_market_minutes:
             previous_minute = exchange.trading_calendar.previous_minute(minute=dt)
-            get_price = partial(
-                exchange.get_adjusted_value,
+            prices = exchange.get_adjusted_value(
                 field="close",
                 dt=previous_minute,
                 perspective_dt=dt,
@@ -404,25 +407,30 @@ class PositionTracker:
             )
 
         else:
-            get_price = partial(
-                exchange.get_scalar_asset_spot_value_sync,
-                field="close",
+            prices = await exchange.get_spot_value(
+                fields=frozenset(["close"]),
                 dt=dt,
-                frequency=self.data_frequency
+                assets=frozenset(assets),
+                data_frequency=self.data_frequency
             )
-        for outer_position in self.positions.values():
-            inner_position = outer_position
+        price_by_sid = {
+            row["sid"]: row["close"]
+            for row in prices.select(["sid", "close"]).to_dicts()
+        }
+        for position in self.positions.values():
+            # print("SYNCING")
+            #last_sale_price = (await get_price(position.asset))["close"][0]
+            # last_sale_price = prices.filter(pl.col("sid") == position.asset.sid)["close"][0]
+            last_sale_price = price_by_sid.get(position.asset.sid)
 
-            last_sale_price = (await get_price(inner_position.asset))["close"][0]
-            print(f"Last sale price for {inner_position.asset.asset_name} is {last_sale_price} at {dt}")
+            print(f"Last sale price for {position.asset.asset_name} is {last_sale_price} at {dt}")
             # inline ~isnan because this gets called once per position per minute
             if last_sale_price is None:
-
                 self._logger.warning(
-                    f"Error updating last sale price for {inner_position.asset.asset_name} on {dt}. Price is None")
+                    f"Error updating last sale price for {position.asset.asset_name} on {dt}. Price is None")
             else:  # last_sale_price == last_sale_price:
-                inner_position.last_sale_price = last_sale_price
-                inner_position.last_sale_date = dt
+                position.last_sale_price = last_sale_price
+                position.last_sale_date = dt
 
     @property
     def stats(self):

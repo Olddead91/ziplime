@@ -489,6 +489,12 @@ class BundleService:
         data_bundle.data = data
         data_bundle.sid_indexes = {row["sid"]: (row["start_index"], row["end_index"] + 1) for row in
                                    sid_indexes.iter_rows(named=True)}
+
+        # data_bundle.asset_sid_date_index = {
+        #     (row["sid"], row["date"]): row["index"]
+        #     for row in data.with_row_index().iter_rows(named=True)
+        # }
+
         return data_bundle
 
     async def clean(self, bundle_name: str, before: datetime.datetime = None, after: datetime.datetime = None,

@@ -173,57 +173,63 @@ class SimulationExchange(Exchange):
     def get_last_traded_dt(self, asset):
         pass
 
-    def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
-                       data_frequency: datetime.timedelta) -> pl.DataFrame:
-        pass
-
-    def get_realtime_bars(self, assets, frequency):
-        pass
-
-    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
-                                          frequency: datetime.timedelta):
-        return self.get_data_by_limit(
-            fields=frozenset({field}),
-            limit=1,
-            end_date=dt,
-            frequency=frequency,
-            assets=frozenset({asset}),
-            include_end_date=True,
-        )
-
-    def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
-                                         frequency: datetime.timedelta):
-
-        return  self.get_data_by_limit(
-            fields=frozenset({field}),
-            limit=1,
-            end_date=dt,
-            frequency=frequency,
-            assets=frozenset({asset}),
-            include_end_date=True,
-        )
-
-    # @lru_cache(maxsize=100)
-    async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None):
-        data = {}
-        # print(f"Getting current: {assets}, fields={fields}, dt={dt}")
-        # TODO: check this, uncomment adjust_minutes
-        # if not self._adjust_minutes:
-        # return self.data_source.get_spot_value(
-        #     assets=assets,
-        #     fields=fields,
-        #     dt=dt,
-        #     frequency=self.data_source.frequency
-        # )
-
+    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
+                       data_frequency: datetime.timedelta = None) -> pl.DataFrame:
         return await self.get_data_by_limit(
             fields=fields,
             limit=1,
             end_date=dt,
-            frequency=self.data_source.frequency,
+            frequency=data_frequency or self.data_source.frequency,
             assets=assets,
             include_end_date=True,
         )
+
+    def get_realtime_bars(self, assets, frequency):
+        pass
+
+    # async def get_scalar_asset_spot_value(self, assets: list[Asset], field: str, dt: datetime.datetime,
+    #                                       frequency: datetime.timedelta):
+    #     return self.get_data_by_limit(
+    #         fields=frozenset({field}),
+    #         limit=1,
+    #         end_date=dt,
+    #         frequency=frequency,
+    #         assets=frozenset({asset}),
+    #         include_end_date=True,
+    #     )
+
+    # def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
+    #                                      frequency: datetime.timedelta):
+    #
+    #     return  self.get_data_by_limit(
+    #         fields=frozenset({field}),
+    #         limit=1,
+    #         end_date=dt,
+    #         frequency=frequency,
+    #         assets=frozenset({asset}),
+    #         include_end_date=True,
+    #     )
+
+    # async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None):
+    #     data = {}
+    #     # print(f"Getting current: {assets}, fields={fields}, dt={dt}")
+    #     # TODO: check this, uncomment adjust_minutes
+    #     # if not self._adjust_minutes:
+    #     # return self.data_source.get_spot_value(
+    #     #     assets=assets,
+    #     #     fields=fields,
+    #     #     dt=dt,
+    #     #     frequency=self.data_source.frequency
+    #     # )
+    #
+    #     return await self.get_data_by_limit(
+    #         fields=fields,
+    #         limit=1,
+    #         end_date=dt,
+    #         frequency=self.data_source.frequency,
+    #         assets=assets,
+    #         include_end_date=True,
+    #     )
         # return df_raw
 
     @aiocache.cached(cache=Cache.MEMORY)

@@ -33,6 +33,7 @@ class FixedSlippage(SlippageModel):
         )
 
     async def process_order(self, exchange: Exchange, dt:datetime.datetime, order):
-        price = await exchange.current(order.asset, "close")
+        price = await exchange.get_spot_value(frozenset([order.asset]), frozenset(["close"]),
+                                              )
 
         return (price + (self.spread / 2.0 * order.direction), order.amount)

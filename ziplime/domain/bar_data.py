@@ -163,7 +163,7 @@ class BarData:
         if data_source is None:
             data_source = self.default_data_source.name
         if not self._adjust_minutes:
-            return await self.data_sources[data_source].current(
+            return await self.data_sources[data_source].get_spot_value(
                 assets=assets,
                 fields=fields,
                 dt=self._get_current_minute(),

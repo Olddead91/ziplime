@@ -24,13 +24,19 @@ class AlgorithmConfig(BaseAlgorithmConfig):
 
 
 async def initialize(context):
-    context.asset = await context.symbol("AAPL")
+    # context.asset = await context.symbol("AAPL")
+    context.assets = [
+        #await context.symbol("NVDA"),
+                      await context.symbol("AAPL"),
+                      await context.symbol("AMZN")
+                      ]
+
     context.short_window = 50
     context.long_window = 200
 
 
 async def handle_data(context:TradingAlgorithm, data: BarData):
-    asset = context.asset
+    asset = context.assets[0]
     df = await data.history(assets=[asset], fields=["close"], bar_count=context.long_window)
     df = await data.current(assets=[asset], fields=["close"])
 
@@ -38,9 +44,9 @@ async def handle_data(context:TradingAlgorithm, data: BarData):
 
     current_amount = getattr(context.portfolio.positions.get(asset, 0), 'amount', 0)
 
-
-    order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())
-    order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
+    for asset in context.assets:
+        order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())
+        order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
 
 
     # order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())

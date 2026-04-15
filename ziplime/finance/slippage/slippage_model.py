@@ -108,10 +108,13 @@ class SlippageModel(metaclass=FinancialModelMeta):
         raise NotImplementedError("process_order")
 
     async def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime,
-                 same_bar_execution: bool, price_used_in_order_execution: Literal["open", "close", "low", "high"]):
+                       same_bar_execution: bool,
+                       price_used_in_order_execution: Literal["open", "close", "low", "high"]):
         self._volume_for_bar = 0
-        current_val = await exchange.current(assets=assets, fields=frozenset({"volume", price_used_in_order_execution}),
-                                       dt=current_dt)
+        current_val = await exchange.get_spot_value(
+            assets=assets, fields=frozenset({"volume", price_used_in_order_execution}),
+            dt=current_dt
+        )
 
         volume_s = current_val["volume"]
         price_s = current_val[price_used_in_order_execution]
@@ -148,9 +151,10 @@ class SlippageModel(metaclass=FinancialModelMeta):
             txn = None
 
             try:
-                execution_price, execution_volume = await self.process_order(exchange=exchange, dt=current_dt, order=order,
-                                                                       price=price
-                                                                       )
+                execution_price, execution_volume = await self.process_order(exchange=exchange, dt=current_dt,
+                                                                             order=order,
+                                                                             price=price
+                                                                             )
 
                 if execution_price is not None:
                     # print(

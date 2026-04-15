@@ -472,8 +472,8 @@ class LimeTraderSdkExchange(Exchange):
             symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
         return getattr(quote, field)
 
-    async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str], exchange_name: str):
-        ...
+    # async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str]):
+    #     ...
 
     async def get_data_by_limit(self, fields: frozenset[str],
                           limit: int,

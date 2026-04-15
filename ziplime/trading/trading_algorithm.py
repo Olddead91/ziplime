@@ -752,9 +752,12 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             )
         else:
             # last_price = self.current_data.current([asset], fields={"price"})["price"][0]
-            last_price_data = (await self.exchanges[exchange_name].current(frozenset({asset}),
-                                                                           dt=self.simulation_dt,
-                                                                           fields=frozenset({"price"})))["price"]
+            exchange = self.exchanges[exchange_name]
+            last_price_data = (await exchange.get_spot_value(frozenset({asset}),
+                                                             dt=self.simulation_dt,
+                                                             fields=frozenset({"price"}),
+                                                             data_frequency=None
+                                                             ))["price"]
             if len(last_price_data) == 0:
                 # if last_price is None:
                 raise CannotOrderDelistedAsset(
@@ -1055,7 +1058,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     def account(self):
         # self._sync_last_sale_prices()
         return self._ledger.account
-
 
     @api_method
     def get_datetime(self):

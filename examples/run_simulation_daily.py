@@ -24,6 +24,8 @@ logger = structlog.get_logger(__name__)
 async def _run_simulation():
     start_date = datetime.datetime(year=2020, month=1, day=3, tzinfo=pytz.timezone("America/New_York"))
     end_date = datetime.datetime(year=2025, month=2, day=1, tzinfo=pytz.timezone("America/New_York"))
+    start_auction_delta = datetime.timedelta(minutes=15)
+    end_auction_delta = datetime.timedelta(minutes=15)
     # Backtest completed in 3 seconds
     bundle_service = get_bundle_service()
 
@@ -47,8 +49,8 @@ async def _run_simulation():
                                                           end_date=end_date,
                                                           symbols=["META", "AAPL", "AMZN", "NFLX", "GOOGL",
                                                                    ],
-                                                          start_auction_delta=datetime.timedelta(minutes=15),
-                                                          end_auction_delta=datetime.timedelta(minutes=15),
+                                                          start_auction_delta=start_auction_delta,
+                                                          end_auction_delta=end_auction_delta,
                                                           aggregations=aggregations,
                                                           )
 
@@ -83,6 +85,8 @@ async def _run_simulation():
         max_leverage=1.0,
         same_bar_execution=True,
         price_used_in_order_execution="close",
+        # start_auction_delta=start_auction_delta,
+        # end_auction_delta=end_auction_delta
     )
 
     if result.errors:
@@ -93,19 +97,19 @@ async def _run_simulation():
 
 
     # Get cash from algo
-    start_cash = sum(exchange.get_start_cash_balance() for exchange in result.trading_algorithm.exchanges.values())
-    logger.info(f"Starting_cash: {start_cash}")
-    for transaction_freq in result.perf.transactions:
-        for transaction in transaction_freq:
+    # start_cash = sum(exchange.get_start_cash_balance() for exchange in result.trading_algorithm.exchanges.values())
+    # logger.info(f"Starting_cash: {start_cash}")
+    # for transaction_freq in result.perf.transactions:
+    #     for transaction in transaction_freq:
+    #
+    #         start_cash -=  transaction.total_price()
+    #         # print("Start cash: ", start_cash,)
+    #         cash_flow["date"].append(transaction.dt)
+    #         cash_flow["cash_change"].append(-transaction.total_price())
+    #         cash_flow["cash_left"].append(start_cash)
 
-            start_cash -=  transaction.total_price()
-            print("Start cash: ", start_cash,)
-            cash_flow["date"].append(transaction.dt)
-            cash_flow["cash_change"].append(-transaction.total_price())
-            cash_flow["cash_left"].append(start_cash)
-
-    cash_flow_df = pl.DataFrame(data=cash_flow)
-    print(cash_flow)
+    # cash_flow_df = pl.DataFrame(data=cash_flow)
+    # print(cash_flow)
 
 if __name__ == "__main__":
     configure_logging(level=logging.INFO, file_name="mylog.log")

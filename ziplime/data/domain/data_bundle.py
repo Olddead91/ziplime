@@ -58,6 +58,7 @@ class DataBundle(DataSource):
     def get_dataframe_by_sid_and_columns(self, sid: str, columns: frozenset[str]) -> pl.DataFrame:
 
         return self.data.select(pl.col(col) for col in columns).filter(pl.col("sid").is_in(sid))
+
     def get_data_by_date_and_sids(self, fields: frozenset[str],
                          start_date: datetime.datetime,
                          end_date: datetime.datetime,
@@ -197,10 +198,14 @@ class DataBundle(DataSource):
 
         if include_end_date:
             if len(assets) == 1:
-                sid_index = self.sid_indexes[asset_sid]
-                df_raw = self.get_dataframe()[sid_index[0]:sid_index[1]].select(pl.col(col) for col in cols).filter(
-                    pl.col("date") <= end_date,
-                ).tail(total_bar_count)
+                # if total_bar_count == 1:
+                #     sid_index = self.asset_sid_date_index[(asset_sid, end_date)]
+                #     df_raw = self.get_dataframe()[sid_index].select(pl.col(col) for col in cols)
+                # else:
+                    sid_index = self.sid_indexes[asset_sid]
+                    df_raw = self.get_dataframe()[sid_index[0]:sid_index[1]].select(pl.col(col) for col in cols).filter(
+                        pl.col("date") <= end_date,
+                    ).tail(total_bar_count)
             else:
                 df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                     pl.col("date") <= end_date,

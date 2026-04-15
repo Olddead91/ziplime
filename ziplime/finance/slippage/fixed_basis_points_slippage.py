@@ -66,7 +66,7 @@ class FixedBasisPointsSlippage(SlippageModel):
         )
 
     async def process_order(self, exchange: Exchange, dt: datetime.datetime, order: Order, price: float=None) -> tuple[float, float]:
-        current_val = await exchange.current(assets=frozenset({order.asset}), fields=frozenset({"open","close", "volume"}), dt=dt)
+        current_val = await exchange.get_spot_value(assets=frozenset({order.asset}), fields=frozenset({"open","close", "volume"}), dt=dt)
         volume = current_val["volume"][0]
         max_volume = int(self.volume_limit * volume)
         if price is None:
@@ -85,7 +85,7 @@ class FixedBasisPointsSlippage(SlippageModel):
                                 percentage: float,
                                 available_cash: float) -> tuple[float, float]:
 
-        current_val = await exchange.current(assets=frozenset({asset}), fields=frozenset({"close", "volume", }), dt=dt)
+        current_val = await exchange.get_spot_value(assets=frozenset({asset}), fields=frozenset({"close", "volume", }), dt=dt)
         volume = current_val["volume"][0]
         max_volume = int(self.volume_limit * volume)
 
