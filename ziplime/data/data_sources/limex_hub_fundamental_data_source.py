@@ -13,36 +13,33 @@ import polars as pl
 from ziplime.data.services.data_bundle_source import DataBundleSource
 
 fundamental_data_fields = [
-    "total_share_holder_equity",
-    "total_liabilities",
-    "total_assets",
-    "shares_outstanding",
-    "operating_income",
-    "roi",
-    "roe",
-    "roa",
-    "revenue",
-    "return_on_tangible_equity",
-    "quick_ratio",
-    "price_sales",
-    "price_fcf",
-    "pe_ratio",
-    "price_book",
-    "operating_margin",
-    "net_worth",
-    "net_income",
-    "number_of_employees",
-    "gross_profit",
-    "eps_forecast",
-    "net_profit_margin",
+    "balance_sheet",
+    "beta",
+    "cash_flow",
     "dividend_yield",
-    "gross_margin",
-    "ebitda",
-    "eps",
-    "debt_equity_ratio",
-    "current_ratio",
-    "long_term_debt",
-]
+    "dividend_yield_actual",
+    "earnings_variability",
+    "growth",
+    "income_statement",
+    "leverage",
+    "machine_1",
+    "machine_10",
+    "machine_2",
+    "machine_3",
+    "machine_4",
+    "machine_5",
+    "machine_6",
+    "machine_7",
+    "machine_8",
+    "machine_9",
+    "momentum",
+    "profitability",
+    "short_interest",
+    "size",
+    "trading_activity",
+    "value",
+    "volatility"
+    ]
 
 
 def fetch_fundamental_data_task(date_from: datetime.datetime,
@@ -55,14 +52,27 @@ def fetch_fundamental_data_task(date_from: datetime.datetime,
         symbol=symbol,
         from_date=(date_from - datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
         to_date=(date_to + datetime.timedelta(days=1)).strftime("%Y-%m-%d"),
-        fields=fundamental_data_fields,
+        fields=','.join(fundamental_data_fields),
     ), include_index=True)
-    if len(df) > 0:
-        df = df.with_columns(
-            pl.lit(symbol).alias("symbol"),
-            date=pl.col("date").cast(pl.Datetime).dt.replace_time_zone(str(date_from.tzinfo)),
-        ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
+    if len(df) == 0:
         return df
+
+    df = df.with_columns(
+        pl.lit(symbol).alias("symbol"),
+        date=pl.col("date").cast(pl.Datetime).dt.replace_time_zone(str(date_from.tzinfo)),
+    ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
+
+    if len(df) == 0:
+        return df
+
+    # Pivot: field column → separate columns, values from "value"
+    df = df.pivot(
+        on="field",
+        index=["date", "symbol"],
+        values="value",
+        aggregate_function="last",
+    ).sort(["symbol", "date"])
+
     return df
 
 
