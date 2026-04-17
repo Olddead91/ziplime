@@ -218,7 +218,7 @@ class LimeTraderSdkExchange(Exchange):
 
         return result
 
-    def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
+    async def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
         result = []
         for order_id in order_ids:
             order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order_id)
@@ -362,7 +362,7 @@ class LimeTraderSdkExchange(Exchange):
     #         results[order.client_order_id] = tx
     #     return results
 
-    def cancel_order(self, zp_order_id: str) -> None:
+    async def cancel_order(self, zp_order_id: str) -> None:
         try:
             order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(order_id=zp_order_id)
             self._lime_sdk_client.trading.cancel_order(order_id=order.order_id)
@@ -374,7 +374,7 @@ class LimeTraderSdkExchange(Exchange):
         quote = self._lime_sdk_client.market.get_current_quote(asset.symbol)
         return quote.date
 
-    def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt, data_frequency) -> pl.DataFrame:
+    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt, data_frequency) -> pl.DataFrame:
         return self._lime_trader_sdk_data_source.get_spot_value(assets=assets, fields=fields, dt=dt,
                                                                 exchange_country=self.country_code,
                                                                 exchange_name=self.name,
@@ -382,7 +382,7 @@ class LimeTraderSdkExchange(Exchange):
                                                                 )
 
 
-    def get_realtime_bars(self, assets, data_frequency):
+    async def get_realtime_bars(self, assets, data_frequency):
         # TODO: cache the result. The caller
         # (DataPortalLive#get_history_window) makes use of only one
         # column at a time.

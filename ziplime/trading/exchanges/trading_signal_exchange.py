@@ -134,7 +134,7 @@ class TradingSignalExchange(Exchange):
 
         return result
 
-    def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
+    async def get_orders_by_ids(self, order_ids: list[str]) -> list[OrderDetails]:
         result = []
         for order_id in order_ids:
             order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(client_order_id=order_id)
@@ -276,7 +276,7 @@ class TradingSignalExchange(Exchange):
     #         results[order.client_order_id] = tx
     #     return results
 
-    def cancel_order(self, zp_order_id: str) -> None:
+    async def cancel_order(self, zp_order_id: str) -> None:
         try:
             order = self._lime_sdk_client.trading.get_order_details_by_client_order_id(order_id=zp_order_id)
             self._lime_sdk_client.trading.cancel_order(order_id=order.order_id)
@@ -326,7 +326,7 @@ class TradingSignalExchange(Exchange):
             for symbol in symbols
         ]
 
-    def get_realtime_bars(self, assets, data_frequency):
+    async def get_realtime_bars(self, assets, data_frequency):
         # TODO: cache the result. The caller
         # (DataPortalLive#get_history_window) makes use of only one
         # column at a time.

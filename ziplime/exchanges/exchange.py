@@ -76,11 +76,11 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    def get_orders_by_ids(self, order_ids: list[str]):
+    async def get_orders_by_ids(self, order_ids: list[str]):
         ...
 
     @abstractmethod
-    def get_transactions_by_order_ids(self, order_ids: list[str]):
+    async def get_transactions_by_order_ids(self, order_ids: list[str]):
         ...
 
     @abstractmethod
@@ -96,7 +96,7 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    def get_realtime_bars(self, assets, frequency):
+    async def get_realtime_bars(self, assets, frequency):
         ...
 
     @abstractmethod

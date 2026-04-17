@@ -161,10 +161,10 @@ class SimulationExchange(Exchange):
 
         return transactions, commissions, closed_orders
 
-    def get_orders_by_ids(self, order_ids: list[str]):
+    async def get_orders_by_ids(self, order_ids: list[str]):
         pass
 
-    def get_transactions_by_order_ids(self, order_ids: list[str]):
+    async def get_transactions_by_order_ids(self, order_ids: list[str]):
         pass
 
     async def cancel_order(self, order_param):
@@ -184,7 +184,7 @@ class SimulationExchange(Exchange):
             include_end_date=True,
         )
 
-    def get_realtime_bars(self, assets, frequency):
+    async def get_realtime_bars(self, assets, frequency):
         pass
 
     # async def get_scalar_asset_spot_value(self, assets: list[Asset], field: str, dt: datetime.datetime,
