@@ -7,6 +7,7 @@ from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.data_source import DataSource
+from ziplime.domain import account
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.controls.max_leverage import MaxLeverage
 
@@ -177,14 +178,16 @@ async def _prepare_algorithm(
         )
     elif benchmark_returns is not None:
         all_bars = pl.from_pandas(
-            clock.trading_calendar.sessions_minutes(start=clock.sessions[0], end=clock.sessions[-1]).tz_convert(clock.trading_calendar.tz)
+            clock.trading_calendar.sessions_minutes(start=clock.sessions[0], end=clock.sessions[-1]).tz_convert(
+                clock.trading_calendar.tz)
         )
         benchmark_precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
             index_column="date", every=clock.emission_rate
         ).agg(pl.col("close").sum())
     else:
         all_bars = pl.from_pandas(
-            clock.trading_calendar.sessions_minutes(start=clock.sessions[0], end=clock.sessions[-1]).tz_convert(clock.trading_calendar.tz)
+            clock.trading_calendar.sessions_minutes(start=clock.sessions[0], end=clock.sessions[-1]).tz_convert(
+                clock.trading_calendar.tz)
         )
         benchmark_precalculated_series = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
             index_column="date", every=clock.emission_rate
@@ -218,11 +221,27 @@ async def _prepare_algorithm(
     )
 
     orders_by_exchange = {}
-    for exchange in exchanges:
-        exchange_orders = await exchange.get_orders()
-        orders_by_exchange[exchange.name] =exchange_orders
-        for order in exchange_orders.values():
-            tr.new_order_submitted(order=order)
+    # for exchange in exchanges:
+    #     exchange_orders = await exchange.get_orders()
+    #     trades = await exchange._trades(
+    #         date_from=datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=48),
+    #         date_to=datetime.datetime.now(tz=datetime.timezone.utc),
+    #         account_id=str(exchange._account_id)
+    #     )
+    #     order_ids = [trade.order_id for trade in trades.trades]
+    #     orders_by_exchange[exchange.name] = exchange_orders
+    #     # orders_by_ids = await exchange.get_orders_by_ids(order_ids=order_ids)
+    #     for order in exchange_orders.values():
+    #         tr.new_order_submitted(order=order)
+    #     positions = await exchange.get_positions()
+    #     for asset, position in positions.items():
+    #         tr._ledger.position_tracker.update_position(
+    #             asset=asset, exchange=position.exchange,
+    #             last_sale_price=position.last_sale_price,
+    #             last_sale_date=position.last_sale_date,
+    #             cost_basis=position.cost_basis,
+    #             amount=position.amount
+    #         )
 
     if max_leverage is not None:
         max_leverage = MaxLeverage(max_leverage, fail_on_error=False)
@@ -232,61 +251,61 @@ async def _prepare_algorithm(
 
 
 async def _initialize_precalculated_series(
-            asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
-            exchange: Exchange,
+        asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
+        exchange: Exchange,
         emission_rate: datetime.timedelta,
         sessions: pl.Series,
         benchmark_fields: frozenset[str],
 ):
-        """
-        Internal method that pre-calculates the benchmark return series for
-        use in the simulation.
+    """
+    Internal method that pre-calculates the benchmark return series for
+    use in the simulation.
 
-        Parameters
-        ----------
-        asset:  Asset to use
+    Parameters
+    ----------
+    asset:  Asset to use
 
-        trading_calendar: TradingCalendar
+    trading_calendar: TradingCalendar
 
-        trading_days: pd.DateTimeIndex
+    trading_days: pd.DateTimeIndex
 
-        exchange: Exchange
+    exchange: Exchange
 
-        Notes
-        -----
-        If the benchmark asset started trading after the simulation start,
-        or finished trading before the simulation end, exceptions are raised.
+    Notes
+    -----
+    If the benchmark asset started trading after the simulation start,
+    or finished trading before the simulation end, exceptions are raised.
 
-        If the benchmark asset started trading the same day as the simulation
-        start, the first available minute price on that day is used instead
-        of the previous close.
+    If the benchmark asset started trading the same day as the simulation
+    start, the first available minute price on that day is used instead
+    of the previous close.
 
-        We use history to get an adjusted price history for each day's close,
-        as of the look-back date (the last day of the simulation).  Prices are
-        fully adjusted for dividends, splits, and mergers.
+    We use history to get an adjusted price history for each day's close,
+    as of the look-back date (the last day of the simulation).  Prices are
+    fully adjusted for dividends, splits, and mergers.
 
-        Returns
-        -------
-        returns : pd.Series
-            indexed by trading day, whose values represent the %
-            change from close to close.
-        daily_returns : pd.Series
-            the partial daily returns for each minute
-        """
-        all_bars: pl.Series = pl.from_pandas(
-            trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(
-                trading_calendar.tz)
-        )
-        limit = all_bars.to_frame("date").group_by_dynamic(
-            index_column="date", every=emission_rate
-        ).agg()["date"].len()
+    Returns
+    -------
+    returns : pd.Series
+        indexed by trading day, whose values represent the %
+        change from close to close.
+    daily_returns : pd.Series
+        the partial daily returns for each minute
+    """
+    all_bars: pl.Series = pl.from_pandas(
+        trading_calendar.sessions_minutes(start=sessions[0], end=sessions[-1]).tz_convert(
+            trading_calendar.tz)
+    )
+    limit = all_bars.to_frame("date").group_by_dynamic(
+        index_column="date", every=emission_rate
+    ).agg()["date"].len()
 
-        benchmark_series = await exchange.get_data_by_limit(
-            fields=benchmark_fields,
-            limit=limit,
-            frequency=emission_rate,
-            end_date=all_bars[-1],
-            assets=frozenset({asset}),
-            include_end_date=True
-        )
-        return benchmark_series.with_columns(pl.col(benchmark_fields).pct_change().alias("pct_change"))  # [1:]
+    benchmark_series = await exchange.get_data_by_limit(
+        fields=benchmark_fields,
+        limit=limit,
+        frequency=emission_rate,
+        end_date=all_bars[-1],
+        assets=frozenset({asset}),
+        include_end_date=True
+    )
+    return benchmark_series.with_columns(pl.col(benchmark_fields).pct_change().alias("pct_change"))  # [1:]

@@ -7,7 +7,6 @@ from logging import Logger
 from ziplime.trading.trading_algorithm import TradingAlgorithm
 from ziplime.trading.trading_algorithm_execution_result import TradingAlgorithmExecutionResult
 from ziplime.trading.trading_algorithm_execution_status import TradingAlgorithmExecutionStatus
-from ziplime.utils.date_utils import make_utc_aware
 from ziplime.utils.api_support import ZiplineAPI
 
 
@@ -81,7 +80,7 @@ class TradingAlgorithmExecutor:
                 status = TradingAlgorithmExecutionStatus(
                     perf=perf,
                     cumulative_perf=perf["cumulative_perf"],
-                    daily_perf=perf["daily_perf"],
+                    daily_perf=perf.get("daily_perf", {}),
                     cumulative_risk_metrics=perf["cumulative_risk_metrics"],
                     progress=perf["progress"],
                     trading_algorithm=trading_algorithm,
@@ -106,18 +105,6 @@ class TradingAlgorithmExecutor:
                 errors=errors
             )
         yield status
-        # yield TradingAlgorithmExecutionStatus(
-        #     trading_algorithm=trading_algorithm,
-        #     perf=daily_stats,
-        #     risk_report=risk_report,
-        #     errors=errors,
-        #     result=TradingAlgorithmExecutionResult(
-        #         trading_algorithm=trading_algorithm,
-        #         perf=daily_stats,
-        #         risk_report=risk_report,
-        #         errors=errors
-        #     )
-        # )
 
     def analyze(self, trading_algorithm: TradingAlgorithm, perf):
         if trading_algorithm._analyze is None:
