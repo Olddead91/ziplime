@@ -21,7 +21,7 @@ def default_metrics():
     return {
         Returns(),
         ReturnsStatistic(empyrical.annual_volatility, "algo_volatility"),
-        # BenchmarkReturnsAndVolatility(),
+        BenchmarkReturnsAndVolatility(),
         PNL(),
         CashFlow(),
         Orders(),
