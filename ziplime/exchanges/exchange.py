@@ -1,6 +1,6 @@
 import datetime
 import polars as pl
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 
 from exchange_calendars import ExchangeCalendar
 
@@ -18,17 +18,22 @@ from ziplime.gens.domain.trading_clock import TradingClock
 from ziplime.constants.period import Period
 
 
-class Exchange(DataSource):
+class Exchange(DataSource, ABC):
 
     def __init__(self, name: str, canonical_name: str, country_code: str,
                  clock: TradingClock,
                  trading_calendar: ExchangeCalendar,
-                 data_source: DataBundle | None = None):
+                 account_id: str,
+                 is_default: bool,
+                 data_source: DataBundle | None = None,
+                 ):
         self.name = name
         self.canonical_name = canonical_name
         self.country_code = country_code
         self.clock = clock
         self.trading_calendar = trading_calendar
+        self.account_id = account_id
+        self.is_default = is_default
         self.data_source = data_source
 
     def get_start_cash_balance(self):
@@ -92,11 +97,8 @@ class Exchange(DataSource):
         ...
 
     @abstractmethod
-    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime, data_frequency: datetime.timedelta | Period = None):
-        ...
-
-    @abstractmethod
-    async def get_realtime_bars(self, assets, frequency):
+    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
+                             data_frequency: datetime.timedelta | Period = None):
         ...
 
     @abstractmethod
@@ -129,3 +131,6 @@ class Exchange(DataSource):
                                 include_end_date: bool,
                                 ) -> pl.DataFrame:
         ...
+
+    def __hash__(self):
+        return hash(self.name)

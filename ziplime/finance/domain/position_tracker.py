@@ -12,6 +12,7 @@ from ziplime.assets.entities.asset import Asset
 from ziplime.assets.models.dividend import Dividend
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.exchanges.exchange import Exchange
+from ziplime.exchanges.repositories.exchange_repository import ExchangeRepository
 from ziplime.finance.domain.position import Position
 from ziplime.finance.domain.transaction import Transaction
 from ziplime.finance.finance_ext import (
@@ -19,6 +20,7 @@ from ziplime.finance.finance_ext import (
     calculate_position_tracker_stats
 )
 import polars as pl
+
 
 class PositionTracker:
     """The current state of the positions held.
@@ -29,44 +31,51 @@ class PositionTracker:
         The data frequency of the simulation.
     """
 
-    def __init__(self, exchanges: dict[str, Exchange], data_frequency: datetime.timedelta):
+    def __init__(self, data_frequency: datetime.timedelta):
+
+        # (exchange_id, asset, trading_account_id)
         self.positions = OrderedDict()
 
         self._unpaid_dividends = {}
         self._unpaid_stock_dividends = {}
-        self._positions_store = {}
+        # self._positions_store = {}
 
         self.data_frequency = data_frequency
         # self.data_bundle = data_bundle
         # cache the stats until something alters our positions
         self._dirty_stats = True
-        self.exchanges = exchanges
         self._stats = PositionStats.new()
         self._logger = structlog.get_logger(__name__)
 
     def update_position(
             self,
             asset: Asset,
-            exchange: Exchange,
-            amount: float | None = None,
+            exchange_name: str,
+            trading_account_id: str,
+            amount: int | None = None,
             last_sale_price: float | None = None,
             last_sale_date=None,
             cost_basis=None,
-    ):
+    ) -> Position:
         self._dirty_stats = True
+        if exchange_name not in self.positions:
+            self.positions[exchange_name] = {}
+        if trading_account_id not in self.positions[exchange_name]:
+            self.positions[exchange_name][trading_account_id] = {}
 
-        if asset not in self.positions:
+        if asset not in self.positions[exchange_name][trading_account_id]:
             position = Position(
                 asset=asset,
-                exchange=exchange,
+                exchange_name=exchange_name,
+                trading_account_id=trading_account_id,
                 amount=0,
                 cost_basis=float(0.0),
                 last_sale_price=float(0.0),
                 last_sale_date=None,
             )
-            self.positions[asset] = position
+            self.positions[exchange_name][trading_account_id][asset] = position
         else:
-            position = self.positions[asset]
+            position = self.positions[exchange_name][trading_account_id][asset]
 
         if amount is not None:
             position.amount = amount
@@ -76,35 +85,48 @@ class PositionTracker:
             position.last_sale_date = last_sale_date
         if cost_basis is not None:
             position.cost_basis = cost_basis
+        return position
 
     def execute_transaction(self, txn):
         self._dirty_stats = True
 
-        asset = txn.asset
-
-        if asset not in self.positions:
-            position = Position(asset=asset,
-                                exchange=self.exchanges[txn.exchange_name],
-                                amount=0,
-                                cost_basis=0.0,
-                                last_sale_price=0.0,
-                                last_sale_date=None
-                                )
-            self.positions[asset] = position
-        else:
-            position = self.positions[asset]
-
+        # asset = txn.asset
+        # position_key = (asset, txn.exchange)
+        #
+        # if position_key not in self.positions:
+        #     position = Position(
+        #         asset=asset,
+        #         exchange=exchange,
+        #         trading_account_id=trading_account_id,
+        #         amount=0,
+        #         cost_basis=float(0.0),
+        #         last_sale_price=float(0.0),
+        #         last_sale_date=None,
+        #     )
+        #
+        #     self.positions[position_key][trading_account_id] = position
+        # else:
+        #     position = self.positions[asset]
+        position = self.update_position(
+            asset=txn.asset,
+            exchange_name=txn.exchange_name,
+            trading_account_id=txn.trading_account_id,
+            amount=None,
+            last_sale_price=None,
+            last_sale_date=None,
+            cost_basis=None
+        )
         self._update_position(position=position, txn=txn)
-
         if position.amount == 0:
-            del self.positions[asset]
 
-            try:
-                # if this position exists in our user-facing dictionary,
-                # remove it as well.
-                del self._positions_store[asset]
-            except KeyError:
-                pass
+            del self.positions[position.exchange_name][position.trading_account_id][position.asset]
+            #
+            # try:
+            #     # if this position exists in our user-facing dictionary,
+            #     # remove it as well.
+            #     del self._positions_store[asset]
+            # except KeyError:
+            #     pass
 
     def _update_position(self, position: Position, txn: Transaction):
         if position.asset != txn.asset:
@@ -376,61 +398,58 @@ class PositionTracker:
         )
 
     def get_positions(self):
-        for asset, pos in self.positions.items():
-            # Adds the new position if we didn't have one before, or overwrite
-            # one we have currently
-            self._positions_store[asset] = pos
-
-        return self._positions_store
+        return self.positions
+        # print(f"Get positions, len={len(self.positions)}")
+        # for asset, pos in self.positions.items():
+        #     # Adds the new position if we didn't have one before, or overwrite
+        #     # one we have currently
+        #     self._positions_store[asset] = pos
+        #
+        # return self._positions_store
 
     def get_position_list(self):
         return [
-            pos for asset, pos in self.positions.items() if pos.amount != 0
+            pos
+            for trading_account_values in self.positions.values()
+            for trading_account_positions in trading_account_values.values()
+            for pos in trading_account_positions.values()
+            if pos.amount != 0
         ]
 
-    async def sync_last_sale_prices(self, dt: datetime.datetime,
-                                    exchange_name: str,
-                                    handle_non_market_minutes: bool = False):
+    def sync_last_sale_prices(self, dt: datetime.datetime,
+                              prices: dict[tuple[Asset, Exchange], float],
+                              # exchange_name: str,
+                              # handle_non_market_minutes: bool = False
+                              ):
         if not self.positions:
             return
         self._dirty_stats = True
-        exchange = self.exchanges[exchange_name]
-        assets = [position.asset for position in self.positions.values()]
 
-        if handle_non_market_minutes:
-            previous_minute = exchange.trading_calendar.previous_minute(minute=dt)
-            prices = exchange.get_adjusted_value(
-                field="close",
-                dt=previous_minute,
-                perspective_dt=dt,
-                frequency=self.data_frequency
-            )
-
-        else:
-            prices = await exchange.get_spot_value(
-                fields=frozenset(["close"]),
-                dt=dt,
-                assets=frozenset(assets),
-                data_frequency=self.data_frequency
-            )
-        price_by_sid = {
-            row["sid"]: row["close"]
-            for row in prices.select(["sid", "close"]).to_dicts()
-        }
-        for position in self.positions.values():
-            # print("SYNCING")
-            #last_sale_price = (await get_price(position.asset))["close"][0]
-            # last_sale_price = prices.filter(pl.col("sid") == position.asset.sid)["close"][0]
-            last_sale_price = price_by_sid.get(position.asset.sid)
-
-            print(f"Last sale price for {position.asset.asset_name} is {last_sale_price} at {dt}")
-            # inline ~isnan because this gets called once per position per minute
-            if last_sale_price is None:
-                self._logger.warning(
-                    f"Error updating last sale price for {position.asset.asset_name} on {dt}. Price is None")
-            else:  # last_sale_price == last_sale_price:
-                position.last_sale_price = last_sale_price
-                position.last_sale_date = dt
+        for (asset_sid, exchange), last_sale_price in prices.items():
+            for trading_account, asset_positions in self.positions[exchange.name].items():
+                for asset, position in asset_positions.items():
+                    if asset.sid == asset_sid:
+                        # for position in self.positions[(asset, exchange)].values():
+                        if last_sale_price is None:
+                            self._logger.warning(
+                                f"Error updating last sale price for {position.asset.asset_name} on {dt}. Price is None")
+                        else:
+                            position.last_sale_price = last_sale_price
+                            position.last_sale_date = dt
+        # for position in self.positions[()].values():
+        #     # print("SYNCING")
+        #     #last_sale_price = (await get_price(position.asset))["close"][0]
+        #     # last_sale_price = prices.filter(pl.col("sid") == position.asset.sid)["close"][0]
+        #     last_sale_price = prices.get((position.asset, position.exchange))
+        #
+        #     print(f"Last sale price for {position.asset.asset_name} is {last_sale_price} at {dt}")
+        #     # inline ~isnan because this gets called once per position per minute
+        #     if last_sale_price is None:
+        #         self._logger.warning(
+        #             f"Error updating last sale price for {position.asset.asset_name} on {dt}. Price is None")
+        #     else:  # last_sale_price == last_sale_price:
+        #         position.last_sale_price = last_sale_price
+        #         position.last_sale_date = dt
 
     @property
     def stats(self):
@@ -447,7 +466,8 @@ class PositionTracker:
         the stats may have changed.
         """
         if self._dirty_stats:
-            calculate_position_tracker_stats(self.positions, self._stats)
+            calculate_position_tracker_stats(self.positions, position_count=len(self.get_position_list()),
+                                             stats=self._stats)
             self._dirty_stats = False
 
         return self._stats

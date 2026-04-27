@@ -38,8 +38,9 @@ class SimulationExchange(Exchange):
                  future_slippage: SlippageModel,
                  equity_commission: EquityCommissionModel,
                  future_commission: FutureCommissionModel,
+                 account_id:str,
+                 is_default: bool,
                  data_source: DataSource = None,
-                 extra_data_sources: list = None,
                  price_used_in_order_execution: Literal["open", "close", "low", "high"] = "close"
                  ):
         super().__init__(name=name,
@@ -47,7 +48,8 @@ class SimulationExchange(Exchange):
                          clock=clock,
                          data_source=data_source,
                          country_code=country_code,
-                         trading_calendar=trading_calendar)
+                         trading_calendar=trading_calendar,
+                         account_id=account_id, is_default=is_default)
         self.slippage_models = {
             Equity: equity_slippage,
             FuturesContract: future_slippage,
@@ -57,7 +59,7 @@ class SimulationExchange(Exchange):
             FuturesContract: future_commission,
         }
         self.cash_balance = cash_balance
-        self.price_used_in_order_execution=price_used_in_order_execution
+        self.price_used_in_order_execution = price_used_in_order_execution
 
     def get_start_cash_balance(self) -> float:
         return self.cash_balance
@@ -79,7 +81,19 @@ class SimulationExchange(Exchange):
         pass
 
     async def get_portfolio(self) -> Portfolio:
-        pass
+        positions = {}
+        portfolio = Portfolio(start_date=datetime.datetime.now(tz=datetime.timezone.utc),
+                              starting_cash=self.cash_balance,
+                              portfolio_value=self.cash_balance,
+                              cash=self.cash_balance,
+                              cash_flow=0.00,
+                              pnl=0.00,
+                              returns=0.00,
+                              positions_value=0.00,
+                              positions_exposure=0.00,
+                              positions=positions
+                              )
+        return portfolio
 
     async def get_account(self) -> Account:
         pass
@@ -134,12 +148,13 @@ class SimulationExchange(Exchange):
         for asset, asset_orders in orders.items():
             slippage = self.get_slippage_model(asset=asset)
 
-            async for order, txn in slippage.simulate(exchange=self, assets=frozenset({asset}),
-                                                orders_for_asset=asset_orders.values(),
-                                                current_dt=current_dt,
-                                                same_bar_execution=same_bar_execution,
-                                                price_used_in_order_execution=self.price_used_in_order_execution
-                                                ):
+            async for order, txn in slippage.simulate(exchange=self,
+                                                      assets=frozenset({asset}),
+                                                      orders_for_asset=asset_orders.values(),
+                                                      current_dt=current_dt,
+                                                      same_bar_execution=same_bar_execution,
+                                                      price_used_in_order_execution=self.price_used_in_order_execution
+                                                      ):
                 commission = self.get_commission_model(asset=asset)
                 additional_commission = commission.calculate(order=order, transaction=txn)
 
@@ -174,7 +189,7 @@ class SimulationExchange(Exchange):
         pass
 
     async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
-                       data_frequency: datetime.timedelta = None) -> pl.DataFrame:
+                             data_frequency: datetime.timedelta = None) -> pl.DataFrame:
         return await self.get_data_by_limit(
             fields=fields,
             limit=1,
@@ -184,84 +199,36 @@ class SimulationExchange(Exchange):
             include_end_date=True,
         )
 
-    async def get_realtime_bars(self, assets, frequency):
-        pass
-
-    # async def get_scalar_asset_spot_value(self, assets: list[Asset], field: str, dt: datetime.datetime,
-    #                                       frequency: datetime.timedelta):
-    #     return self.get_data_by_limit(
-    #         fields=frozenset({field}),
-    #         limit=1,
-    #         end_date=dt,
-    #         frequency=frequency,
-    #         assets=frozenset({asset}),
-    #         include_end_date=True,
-    #     )
-
-    # def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
-    #                                      frequency: datetime.timedelta):
-    #
-    #     return  self.get_data_by_limit(
-    #         fields=frozenset({field}),
-    #         limit=1,
-    #         end_date=dt,
-    #         frequency=frequency,
-    #         assets=frozenset({asset}),
-    #         include_end_date=True,
-    #     )
-
-    # async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None):
-    #     data = {}
-    #     # print(f"Getting current: {assets}, fields={fields}, dt={dt}")
-    #     # TODO: check this, uncomment adjust_minutes
-    #     # if not self._adjust_minutes:
-    #     # return self.data_source.get_spot_value(
-    #     #     assets=assets,
-    #     #     fields=fields,
-    #     #     dt=dt,
-    #     #     frequency=self.data_source.frequency
-    #     # )
-    #
-    #     return await self.get_data_by_limit(
-    #         fields=fields,
-    #         limit=1,
-    #         end_date=dt,
-    #         frequency=self.data_source.frequency,
-    #         assets=assets,
-    #         include_end_date=True,
-    #     )
-        # return df_raw
-
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_data_by_period(self,
-                           fields: frozenset[str],
-                          start_date: datetime.datetime,
-                          end_date: datetime.datetime,
-                          frequency: datetime.timedelta,
-                          assets: frozenset[Asset],
-                          include_end_date: bool,
-                          source: str
-                          ) -> pl.DataFrame:
+                                 fields: frozenset[str],
+                                 start_date: datetime.datetime,
+                                 end_date: datetime.datetime,
+                                 frequency: datetime.timedelta,
+                                 assets: frozenset[Asset],
+                                 include_end_date: bool,
+                                 source: str
+                                 ) -> pl.DataFrame:
         return await self.data_source.get_data_by_limit(fields=fields,
-                                                  limit=limit,
-                                                  end_date=end_date,
-                                                  frequency=frequency,
-                                                  assets=assets,
-                                                  include_end_date=include_end_date,
-                                                  )
+                                                        limit=limit,
+                                                        end_date=end_date,
+                                                        frequency=frequency,
+                                                        assets=assets,
+                                                        include_end_date=include_end_date,
+                                                        )
 
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_data_by_limit(self, fields: frozenset[str],
-                          limit: int,
-                          end_date: datetime.datetime,
-                          frequency: datetime.timedelta | Period,
-                          assets: frozenset[Asset],
-                          include_end_date: bool,
-                          ) -> pl.DataFrame:
+                                limit: int,
+                                end_date: datetime.datetime,
+                                frequency: datetime.timedelta | Period,
+                                assets: frozenset[Asset],
+                                include_end_date: bool,
+                                ) -> pl.DataFrame:
         return await self.data_source.get_data_by_limit(fields=fields,
-                                                  limit=limit,
-                                                  end_date=end_date,
-                                                  frequency=frequency,
-                                                  assets=assets,
-                                                  include_end_date=include_end_date,
-                                                  )
+                                                        limit=limit,
+                                                        end_date=end_date,
+                                                        frequency=frequency,
+                                                        assets=assets,
+                                                        include_end_date=include_end_date,
+                                                        )

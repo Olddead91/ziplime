@@ -103,7 +103,7 @@ class PositionStats:
         return self
 
 
-def calculate_position_tracker_stats(positions, stats):
+def calculate_position_tracker_stats(positions, position_count: int, stats):
     """Calculate various stats about the current positions.
 
     Parameters
@@ -116,7 +116,7 @@ def calculate_position_tracker_stats(positions, stats):
     position_stats : PositionStats
         The computed statistics.
     """
-    npos = len(positions)
+    npos = position_count
 
     old_index = stats.underlying_index_array
     old_position_exposure = (
@@ -174,40 +174,42 @@ def calculate_position_tracker_stats(positions, stats):
 
     ix = 0
 
-    for outer_position in positions.values():
-        position = outer_position
+    for trading_accounts in positions.values():
+        for trading_account_positions in trading_accounts.values():
+            for position in trading_account_positions.values():
+                # position = outer_position
 
-        # NOTE: this loop does a lot of stuff!
-        # we call this function every time the portfolio value is needed,
-        # which is at least once per simulation day, so let's not iterate
-        # through every single position multiple times.
-        # try:
-        exposure = position.amount * position.last_sale_price
-        # except Exception as e:
-        #     print("exception multiplying a")
-        #     raise
-        if type(position.asset) is FuturesContract:
-            # Futures don't have an inherent position value.
-            value = 0
+                # NOTE: this loop does a lot of stuff!
+                # we call this function every time the portfolio value is needed,
+                # which is at least once per simulation day, so let's not iterate
+                # through every single position multiple times.
+                # try:
+                exposure = position.amount * position.last_sale_price
+                # except Exception as e:
+                #     print("exception multiplying a")
+                #     raise
+                if type(position.asset) is FuturesContract:
+                    # Futures don't have an inherent position value.
+                    value = 0
 
-            # unchecked cast, this is safe because we do a type check above
-            exposure *= position.asset.price_multiplier
-        else:
-            value = exposure
+                    # unchecked cast, this is safe because we do a type check above
+                    exposure *= position.asset.price_multiplier
+                else:
+                    value = exposure
 
-        if exposure > 0:
-            longs_count += 1
-            long_value += value
-            long_exposure += exposure
-        elif exposure < 0:
-            shorts_count += 1
-            short_value += value
-            short_exposure += exposure
+                if exposure > 0:
+                    longs_count += 1
+                    long_value += value
+                    long_exposure += exposure
+                elif exposure < 0:
+                    shorts_count += 1
+                    short_value += value
+                    short_exposure += exposure
 
-        index[ix] = position.asset.sid
-        position_exposure[ix] = exposure
+                index[ix] = position.asset.sid
+                position_exposure[ix] = exposure
 
-        ix += 1
+                ix += 1
 
     net_value = long_value + short_value
     gross_value = long_value - short_value

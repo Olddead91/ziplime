@@ -55,7 +55,7 @@ async def _run_simulation():
         custom_data_sources=custom_data_sources,
         config_file=str(Path("algorithms/test_algo/test_algo_config.json").absolute()),
         emission_rate=emission_rate,
-        benchmark_asset_symbol="VOO",
+        benchmark_asset_symbol="META",
         benchmark_returns=None,
         stop_on_error=False,
     )

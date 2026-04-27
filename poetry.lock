@@ -1567,14 +1567,14 @@ websocket-client = ">=1.6.4,<2.0.0"
 
 [[package]]
 name = "limexhub"
-version = "1.10.18"
+version = "1.16.16"
 description = "A simple API wrapper for Limex DataHub"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "limexhub-1.10.18-py3-none-any.whl", hash = "sha256:d861cc6e056a34346692d42a2c49ad9734e99423ce00e830494d717984f5c27a"},
-    {file = "limexhub-1.10.18.tar.gz", hash = "sha256:183a0b133d3eb8bb459c2bf2842309a92bcabb15542777042cc27e0e065b9a68"},
+    {file = "limexhub-1.16.16-py3-none-any.whl", hash = "sha256:e02281b2daa16612477122ffdbac8f3cf669dbf86f63010ca5196367841c8f77"},
+    {file = "limexhub-1.16.16.tar.gz", hash = "sha256:07dcf74500c90c221aad01012eb64d736302abc3c63dd721573fe47f6214af9b"},
 ]
 
 [package.dependencies]
@@ -4205,4 +4205,4 @@ repair = ["scipy (>=1.6.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "3a8e4d407b705ab50eaed57ed5ba47f6f3ae24078fe5f63e1db5517d6be19d08"
+content-hash = "f54e98427ba525505af656525d9f52c405b166018da652914a099db0b0776ff7"

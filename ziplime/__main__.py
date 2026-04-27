@@ -427,6 +427,7 @@ async def run(
                 exchange_fee=FUTURE_EXCHANGE_FEES_BY_SYMBOL,
                 min_trade_cost=DEFAULT_MINIMUM_COST_PER_FUTURE_TRADE
             ),
+            account_id="simulation_account"
         )
     elif exchange_type == "lime-trader-sdk":
         exchange_class = LimeTraderSdkExchange(

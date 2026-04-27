@@ -11,6 +11,7 @@ from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.domain.account import Account
 from ziplime.domain.portfolio import Portfolio
 from ziplime.exchanges.exchange import Exchange
+from ziplime.exchanges.repositories.exchange_repository import ExchangeRepository
 from ziplime.finance.commission import CommissionModel
 from ziplime.finance.domain.commission import Commission
 
@@ -45,8 +46,6 @@ class Ledger:
     """
 
     def __init__(self, trading_sessions: pd.DatetimeIndex,
-                 exchanges: dict[str, Exchange],
-                 default_exchange: Exchange,
                  data_frequency: datetime.timedelta,
                  ):
         if len(trading_sessions):
@@ -56,8 +55,6 @@ class Ledger:
         # Have some fields of the portfolio changed? This should be accessed
         # through ``self._dirty_portfolio``
         self.__dirty_portfolio = False
-
-        self.default_exchange = default_exchange
 
         self.logger = structlog.get_logger(__name__)
 
@@ -73,11 +70,10 @@ class Ledger:
 
         # this is a component of the cache key for the account
         self._position_stats = None
-        start_cash = sum(exchange.get_start_cash_balance() for exchange in exchanges.values())
         self._portfolio = Portfolio(start_date=start,
-                                    starting_cash=start_cash,
-                                    portfolio_value=start_cash,
-                                    cash=start_cash,
+                                    starting_cash=0.00,
+                                    portfolio_value=0.00,
+                                    cash=0.00,
                                     cash_flow=0.00,
                                     pnl=0.00,
                                     returns=0.00,
@@ -113,7 +109,7 @@ class Ledger:
         self._account_overrides = {}
         self._data_frequency = data_frequency
 
-        self.position_tracker = PositionTracker(exchanges=exchanges, data_frequency=data_frequency)
+        self.position_tracker = PositionTracker(data_frequency=data_frequency)
 
         self._processed_transactions = {}
 
@@ -174,11 +170,12 @@ class Ledger:
         # save the daily returns time-series
         self.daily_returns_series.iloc[session_ix] = self.todays_returns
 
-    async def sync_last_sale_prices(self, dt: datetime.datetime, handle_non_market_minutes: bool = False):
-        await self.position_tracker.sync_last_sale_prices(
+    def sync_last_sale_prices(self, dt: datetime.datetime, prices: dict[tuple[Asset, Exchange], float]):
+        self.position_tracker.sync_last_sale_prices(
             dt=dt,
-            handle_non_market_minutes=handle_non_market_minutes,
-            exchange_name=self.default_exchange.name
+            prices=prices,
+            # handle_non_market_minutes=handle_non_market_minutes,
+            # exchange_name=self.default_exchange.name
         )
         self._dirty_portfolio = True
 
@@ -316,12 +313,11 @@ class Ledger:
         commission : CommissionModel
             The commission being paid.
         """
-        #print(f"Commission for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
+        # print(f"Commission for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
         self.position_tracker.handle_commission(asset=commission.asset, cost=commission.amount)
-        #print(f"Commission 2 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
+        # print(f"Commission 2 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
         self._cash_flow(-commission.amount)
-        #print(f"Commission 3 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
-
+        # print(f"Commission 3 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
 
     def close_position(self, asset: Asset, dt: datetime.datetime):
         txn = self.position_tracker.maybe_create_close_position_transaction(
@@ -436,6 +432,49 @@ class Ledger:
             )
 
         return total
+
+    def synchronize_exchange_portfolio(self, portfolio: Portfolio):
+        # start_cash = sum(exchange.get_start_cash_balance() for exchange in exchange_repository.get_all_exchanges())
+
+        pt = self.position_tracker
+        for asset, position in portfolio.positions.items():
+            pt.update_position(
+                asset=asset, exchange_name=position.exchange_name,
+                last_sale_price=position.last_sale_price,
+                last_sale_date=position.last_sale_date,
+                cost_basis=position.cost_basis,
+                amount=position.amount,
+                trading_account_id=position.trading_account_id,
+            )
+        self._portfolio.cash = portfolio.cash
+        self._portfolio.starting_cash = portfolio.starting_cash
+        self._portfolio.portfolio_value = portfolio.portfolio_value
+
+        self._portfolio.positions = pt.get_positions()
+        position_stats = pt.stats
+
+        self._portfolio.positions_value = position_value = position_stats.net_value
+        self._portfolio.positions_exposure = position_stats.net_exposure
+        payout_total = self._get_payout_total(pt.positions)
+        if payout_total > 0:
+            self._cash_flow(payout_total)
+
+        start_value = self._portfolio.portfolio_value
+
+        # update the new starting value
+        self._portfolio.portfolio_value = end_value = self._portfolio.cash + position_value
+
+        pnl = end_value - start_value
+        if start_value != 0:
+            returns = pnl / start_value
+        else:
+            returns = 0.00
+
+        self._portfolio.pnl += pnl
+        self._portfolio.returns = (1 + self._portfolio.returns) * (1 + returns) - 1
+
+        # the portfolio has been fully synced
+        self._dirty_portfolio = False
 
     async def update_portfolio(self) -> None:
         """Force a computation of the current portfolio state."""

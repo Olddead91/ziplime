@@ -18,3 +18,7 @@ class Asset:
 
     def __hash__(self):
         return hash(self.sid)
+
+
+    def __str__(self):
+        return f"{self.asset_name}-{self.mic}-({self.sid})"

@@ -25,7 +25,8 @@ from ziplime.exchanges.exchange import Exchange
 @dataclasses.dataclass
 class Position:
     asset: Asset
-    exchange: Exchange
+    exchange_name: str
+    trading_account_id: str
     amount: int
     cost_basis: float
     last_sale_price: float

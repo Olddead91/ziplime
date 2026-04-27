@@ -25,6 +25,7 @@ class Order:
             execution_style: ExecutionStyle,
             status: OrderStatus,
             exchange_name: str,
+            trading_account_id: str,
             exchange_order_id: str = None
     ):
         """
@@ -46,6 +47,7 @@ class Order:
         self.filled = filled
         self.commission = commission
         self.exchange_name = exchange_name
+        self.trading_account_id=trading_account_id
         self._status = status
 
         is_buy = amount > 0

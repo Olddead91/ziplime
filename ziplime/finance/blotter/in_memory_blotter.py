@@ -9,22 +9,22 @@ from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
 from ziplime.exchanges.exchange import Exchange
 from ...assets.entities.asset import Asset
+from ...exchanges.repositories.exchange_repository import ExchangeRepository
 
 
 class InMemoryBlotter(Blotter):
     def __init__(
             self,
-            exchanges: dict[str, Exchange],
+            exchanges : list[Exchange],
             cancel_policy,
             new_orders: dict = None
     ):
         super().__init__(cancel_policy=cancel_policy)
         self._logger = structlog.get_logger(__name__)
-        self.exchanges = exchanges
         # these orders are aggregated by asset
-        self.open_orders = {exchange.name: defaultdict(dict) for exchange in exchanges.values()}
+        self.open_orders = {exchange.name: defaultdict(dict) for exchange in exchanges}
         # keep a dict of orders by their own id
-        self.orders = {exchange.name: {} for exchange in exchanges.values()}
+        self.orders = {exchange.name: {} for exchange in exchanges}
         # holding orders that have come in since the last event.
         self.new_orders = new_orders or OrderedDict()
 

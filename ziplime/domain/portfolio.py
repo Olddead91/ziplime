@@ -22,13 +22,3 @@ class Portfolio:
     positions: dict[Asset, Position] = field(default_factory=dict)
 
     start_date: datetime.datetime | None = None
-
-
-    # def __setattr__(self, name, value):
-    #     if name == "cash":
-    #         old = getattr(self, "cash", None)
-    #         if value < 0:
-    #             print("A")
-    #         if old is not None and old != value:
-    #             print(f"[Portfolio] cash changed: {old} -> {value}")
-    #     super().__setattr__(name, value)

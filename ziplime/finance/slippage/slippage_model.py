@@ -107,7 +107,8 @@ class SlippageModel(metaclass=FinancialModelMeta):
         """
         raise NotImplementedError("process_order")
 
-    async def simulate(self, exchange, assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime,
+    async def simulate(self, exchange,
+                       assets: frozenset[Asset], orders_for_asset, current_dt: datetime.datetime,
                        same_bar_execution: bool,
                        price_used_in_order_execution: Literal["open", "close", "low", "high"]):
         self._volume_for_bar = 0
@@ -151,10 +152,12 @@ class SlippageModel(metaclass=FinancialModelMeta):
             txn = None
 
             try:
-                execution_price, execution_volume = await self.process_order(exchange=exchange, dt=current_dt,
-                                                                             order=order,
-                                                                             price=price
-                                                                             )
+                execution_price, execution_volume = await self.process_order(
+                    exchange=exchange,
+                    dt=current_dt,
+                    order=order,
+                    price=price
+                )
 
                 if execution_price is not None:
                     # print(
@@ -173,7 +176,8 @@ class SlippageModel(metaclass=FinancialModelMeta):
                         dt=current_dt,
                         price=execution_price,
                         order_id=order.id,
-                        exchange_name=exchange.name
+                        exchange_name=exchange.name,
+                        trading_account_id=order.trading_account_id
                     )
 
 

@@ -24,8 +24,8 @@ class BenchmarkReturnsAndVolatility:
             sessions: pd.DatetimeIndex, benchmark_source: BenchmarkSource
     ):
         daily_returns = benchmark_source.daily_returns(
-            sessions[0],
-            sessions[-1],
+            start=sessions[0],
+            end=sessions[-1],
         )
         daily_returns = daily_returns.fill_nan(0.0)
         daily_returns_series = daily_returns.select("pct_change")

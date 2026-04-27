@@ -26,6 +26,7 @@ from ziplime.utils.run_algo import run_algorithm, run_algorithm_iter
 import polars as pl
 from typing import AsyncIterator
 from typing import Literal
+from ziplime.exchanges.repositories.in_memory_exchange_repository import InMemoryExchangeRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -130,16 +131,19 @@ async def run_simulation(
             future_commission=future_commission,
             cash_balance=total_cash,
             clock=clock,
-            price_used_in_order_execution=price_used_in_order_execution
+            price_used_in_order_execution=price_used_in_order_execution,
+            account_id="simulation_account",
+            is_default=True
         )
 
+    exchange_repository = InMemoryExchangeRepository()
+    await exchange_repository.add_exchange(exchange)
     return await run_algorithm(
         algorithm=algo,
         asset_service=asset_service,
         print_algo=True,
         metrics_set=default_metrics(),
         custom_loader=None,
-        exchanges=[exchange],
         clock=clock,
         benchmark_returns=benchmark_returns,
         benchmark_asset_symbol=benchmark_asset_symbol,
@@ -147,7 +151,8 @@ async def run_simulation(
         custom_data_sources=custom_data_sources,
         max_leverage=max_leverage,
         same_bar_execution=same_bar_execution,
-        price_used_in_order_execution=price_used_in_order_execution
+        price_used_in_order_execution=price_used_in_order_execution,
+        exchange_repository=exchange_repository
     )
 
 
@@ -235,8 +240,8 @@ async def run_simulation_iter(
         equity_slippage = FixedBasisPointsSlippage()
     if future_slippage is None:
         future_slippage = VolatilityVolumeShare(
-                volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
-            )
+            volume_limit=DEFAULT_FUTURE_VOLUME_SLIPPAGE_BAR_LIMIT,
+        )
 
     if exchange is None:
         if same_bar_execution and price_used_in_order_execution != "close":
@@ -255,8 +260,12 @@ async def run_simulation_iter(
             future_commission=future_commission,
             cash_balance=total_cash,
             clock=clock,
-            price_used_in_order_execution=price_used_in_order_execution
+            price_used_in_order_execution=price_used_in_order_execution,
+            is_default=True,
+            account_id="simulation_account"
         )
+    exchange_repository = InMemoryExchangeRepository()
+    await exchange_repository.add_exchange(exchange)
 
     async for status in run_algorithm_iter(
             algorithm=algo,
@@ -264,7 +273,6 @@ async def run_simulation_iter(
             print_algo=True,
             metrics_set=default_metrics(),
             custom_loader=None,
-            exchanges=[exchange],
             clock=clock,
             benchmark_returns=benchmark_returns,
             benchmark_asset_symbol=benchmark_asset_symbol,
@@ -272,6 +280,7 @@ async def run_simulation_iter(
             custom_data_sources=custom_data_sources,
             max_leverage=max_leverage,
             same_bar_execution=same_bar_execution,
-            price_used_in_order_execution=price_used_in_order_execution
+            price_used_in_order_execution=price_used_in_order_execution,
+            exchange_repository=exchange_repository
     ):
         yield status

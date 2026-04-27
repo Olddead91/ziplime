@@ -83,7 +83,9 @@ async def _run_simulation():
             logger.error(status.errors)
         if status.result:
             logger.info("Algorithm finished")
-            print(status.result.perf.head(n=10).to_markdown())
+            print(status.result.perf[["period_open", "period_close", "long_exposure",   "starting_value",  "ending_cash",
+                  "returns", "pnl", "starting_cash", "portfolio_value"]
+                  ].head(n=10).to_markdown())
 
     # Get cash from algo
 
