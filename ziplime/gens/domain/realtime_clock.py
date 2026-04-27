@@ -116,7 +116,7 @@ class RealtimeClock(TradingClock):
                 self.market_opens_yielded[current_session_index] = True
                 yield current_time.date(), SimulationEvent.SESSION_START
             elif self.market_opens[current_session_index] <= current_time <= self.market_closes[current_session_index]:
-                if last_bar_emit is None or current_time - last_bar_emit >= datetime.timedelta(seconds=10):
+                if last_bar_emit is None or current_time - last_bar_emit >= self.emission_rate:
                     last_bar_emit = current_time
                     yield current_time, SimulationEvent.BAR
                     current_time = datetime.datetime.now(
