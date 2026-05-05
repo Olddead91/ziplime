@@ -4,6 +4,7 @@ import pathlib
 import logging
 
 from ziplime.core.ingest_data import get_asset_service, ingest_market_data, ingest_custom_data
+from ziplime.data.data_sources.limex_hub_congress_data_source import LimexHubCongressDataSource
 from ziplime.data.data_sources.limex_hub_fundamental_data_source import LimexHubFundamentalDataSource
 from ziplime.data.services.limex_hub_data_source import LimexHubDataSource
 from ziplime.utils.logging_utils import configure_logging
@@ -27,6 +28,8 @@ async def ingest_data_limex_hub():
     # STEP 2: Initialize market data source and data bundle source - LimexHub
     market_data_bundle_source = LimexHubDataSource.from_env()
     data_bundle_source = LimexHubFundamentalDataSource.from_env()
+    congress_bundle_source = LimexHubCongressDataSource.from_env()
+
     # STEP 3: Initialize asset service. Default asset database is used
     asset_service = get_asset_service(
         clear_asset_db=False,
@@ -53,6 +56,19 @@ async def ingest_data_limex_hub():
         trading_calendar="NYSE",
         bundle_name="limex_us_fundamental_data",
         data_bundle_source=data_bundle_source,
+        data_frequency="1mo",
+        data_frequency_use_window_end=True,
+        asset_service=asset_service
+    )
+
+    # STEP 5: ingest congress data from limex hub
+    await ingest_custom_data(
+        start_date=start_date,
+        end_date=end_date,
+        symbols=symbols,
+        trading_calendar="NYSE",
+        bundle_name="limex_us_congress_data",
+        data_bundle_source=congress_bundle_source,
         data_frequency="1mo",
         data_frequency_use_window_end=True,
         asset_service=asset_service

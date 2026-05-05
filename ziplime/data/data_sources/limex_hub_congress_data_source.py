@@ -55,6 +55,7 @@ def fetch_congress_data_task(
     df = pl.from_pandas(
         limex_client.congress_trading(ticker=symbol, limit=10000),
         include_index=False,
+        schema_overrides={'option_quantity': pl.Float64()}
     )
     if len(df) == 0:
         return df
@@ -123,6 +124,8 @@ class LimexHubCongressDataSource(DataBundleSource):
                 pbar.update(total_days)
                 if item is None or len(item) == 0:
                     continue
+                if chunks:
+                    item = item.select(chunks[0].columns)
                 chunks.append(item)
 
         if not chunks:
