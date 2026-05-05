@@ -11,7 +11,10 @@ import polars as pl
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
+from ziplime.assets.entities.symbol_universe import SymbolsUniverse
+from ziplime.assets.entities.symbols_universe_asset import SymbolsUniverseAsset
 from ziplime.assets.models.exchange_info import ExchangeInfo
+from ziplime.assets.services.asset_service import AssetService
 from ziplime.data.data_sources.asset_data_source import AssetDataSource
 
 
@@ -54,7 +57,8 @@ class LimexHubAssetDataSource(AssetDataSource):
                 end_date=asset_end_date,
                 auto_close_date=asset_end_date,
                 first_traded=asset_start_date,
-                mic="LIME"
+                mic="LIME",
+                isin=asset["isin"]
             ) for asset in assets_df.iter_rows(named=True)
         ]
 
@@ -64,9 +68,34 @@ class LimexHubAssetDataSource(AssetDataSource):
         exchanges = [ExchangeInfo(exchange="LIME", canonical_name="LIME", country_code="US")]
         return exchanges
 
-    async def get_constituents(self, index: str) -> pl.DataFrame:
-        assets = self._limex_client.constituents(index)
-        return assets
+    async def get_symbol_universe(self, asset_service: AssetService, symbol_universe_name: str) -> SymbolsUniverse:
+        assets = self._limex_client.constituents(universe=symbol_universe_name)
+        symbols = list(set(assets["ticker"]))
+        equities = await asset_service.get_equities_by_symbols(symbols=symbols)
+
+        assets_by_symbol = {asset.get_symbol_by_exchange(None): asset for asset in equities}
+
+        universe_assets = []
+        for row in assets.itertuples():
+            asset = assets_by_symbol.get(row.ticker, None)
+            if asset is None:
+                self._logger.warning(f"Asset {row.ticker} does not exist in assets database. Skipping.")
+                continue
+            universe_assets.append(SymbolsUniverseAsset(
+                symbol_universe_name=symbol_universe_name,
+                start_date=datetime.date.fromisoformat(row.start_date),
+                end_date=datetime.date.fromisoformat(row.end_date),
+                asset=asset,
+                ratio=None
+            ))
+
+        universe = SymbolsUniverse(
+            name=symbol_universe_name,
+            universe_type="index",
+            symbol=symbol_universe_name,
+            assets=universe_assets
+        )
+        return universe
 
     @classmethod
     def from_env(cls) -> Self:

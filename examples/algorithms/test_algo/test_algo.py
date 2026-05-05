@@ -23,14 +23,16 @@ class AlgorithmConfig(BaseAlgorithmConfig):
     equities_to_trade: list[EquityToTrade]
 
 
-async def initialize(context):
+async def initialize(context: TradingAlgorithm):
     # context.asset = await context.symbol("AAPL")
     context.assets = [
         #await context.symbol("NVDA"),
                       await context.symbol("AAPL"),
                       await context.symbol("AMZN")
                       ]
-
+    context.q100us = await context.symbols_universe(name="Q100US", dt=None)
+    context.q500us = await context.symbols_universe(name="Q500US", dt=None)
+    context.q1000us = await context.symbols_universe(name="Q1500US", dt=None)
     context.short_window = 50
     context.long_window = 200
 

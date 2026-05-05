@@ -92,6 +92,7 @@ async def ingest_assets(asset_service: AssetService, asset_data_source: AssetDat
         auto_close_date=asset_end_date,
         first_traded=asset_start_date,
         mic=exchange.exchange,
+        isin=None
     ) for exchange in exchanges]
 
 
@@ -99,103 +100,88 @@ async def ingest_assets(asset_service: AssetService, asset_data_source: AssetDat
     await asset_service.save_equities(equities=assets)
 
 
-async def ingest_default_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
-    """
-    Ingests default asset data into the asset service.
+# async def ingest_default_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
+#     """
+#     Ingests default asset data into the asset service.
+#
+#     This method populates the asset service with predefined assets including a default
+#     currency ("USD") and all US stock symbols. Each asset is configured with default
+#     start and end dates, symbol mappings, and other attributes to ensure compatibility
+#     in the target system's data structure.
+#
+#     Args:
+#         asset_service (AssetService): The service responsible for managing assets. Used to
+#             store the ingested assets, such as exchanges, currencies, and equities.
+#         asset_data_source (AssetDataSource): Source of the asset information. While not used
+#             currently in the function implementation, it potentially allows fetching data
+#             dynamically in future extensions.
+#
+#     Returns:
+#         None
+#     """
+#     asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
+#     asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
+#
+#     usd_currency = Currency(
+#         asset_name="USD",
+#         symbol_mapping={
+#             "LIME": CurrencySymbolMapping(
+#                 symbol="USD",
+#                 exchange_name="LIME",
+#                 start_date=asset_start_date,
+#                 end_date=asset_end_date
+#             )
+#         },
+#         sid=None,
+#         start_date=asset_start_date,
+#         end_date=asset_end_date,
+#         auto_close_date=asset_end_date,
+#         first_traded=asset_start_date,
+#         mic=None
+#     )
+#
+#     equities = [
+#         Equity(
+#             asset_name=symbol,
+#             symbol_mapping={
+#                 "LIME": EquitySymbolMapping(
+#                     symbol=symbol,
+#                     exchange_name="LIME",
+#                     start_date=asset_start_date,
+#                     end_date=asset_end_date,
+#                     company_symbol="",
+#                     share_class_symbol=""
+#                 )
+#             },
+#             sid=None,
+#             start_date=asset_start_date,
+#             end_date=asset_end_date,
+#             auto_close_date=asset_end_date,
+#             first_traded=asset_start_date,
+#             mic=None
+#         ) for symbol in ALL_US_STOCK_SYMBOLS
+#
+#     ]
+#
+#     await asset_service.save_exchanges(
+#         exchanges=[ExchangeInfo(exchange="LIME", canonical_name="LIME", country_code="US")])
+#     await asset_service.save_currencies([usd_currency])
+#     await asset_service.save_equities(equities)
 
-    This method populates the asset service with predefined assets including a default
-    currency ("USD") and all US stock symbols. Each asset is configured with default
-    start and end dates, symbol mappings, and other attributes to ensure compatibility
-    in the target system's data structure.
+async def ingest_symbol_universe(asset_service: AssetService, asset_data_source: AssetDataSource,
+                                 symbol_universe_name: str):
+    """
+    Ingests a symbol universe by retrieving the constituents of a specified index and persisting it.
+
+    Fetches the list of constituent symbols for the given index from the provided data source,
+    retrieves the corresponding Equity objects, constructs a SymbolsUniverse instance, and saves it.
 
     Args:
-        asset_service (AssetService): The service responsible for managing assets. Used to
-            store the ingested assets, such as exchanges, currencies, and equities.
-        asset_data_source (AssetDataSource): Source of the asset information. While not used
-            currently in the function implementation, it potentially allows fetching data
-            dynamically in future extensions.
-
-    Returns:
-        None
+        asset_data_source: Data source for retrieving index constituents.
+        symbol_universe_name: The name or identifier of the index to ingest.
     """
-    asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
-    asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
-
-    usd_currency = Currency(
-        asset_name="USD",
-        symbol_mapping={
-            "LIME": CurrencySymbolMapping(
-                symbol="USD",
-                exchange_name="LIME",
-                start_date=asset_start_date,
-                end_date=asset_end_date
-            )
-        },
-        sid=None,
-        start_date=asset_start_date,
-        end_date=asset_end_date,
-        auto_close_date=asset_end_date,
-        first_traded=asset_start_date,
-        mic=None
-    )
-
-    equities = [
-        Equity(
-            asset_name=symbol,
-            symbol_mapping={
-                "LIME": EquitySymbolMapping(
-                    symbol=symbol,
-                    exchange_name="LIME",
-                    start_date=asset_start_date,
-                    end_date=asset_end_date,
-                    company_symbol="",
-                    share_class_symbol=""
-                )
-            },
-            sid=None,
-            start_date=asset_start_date,
-            end_date=asset_end_date,
-            auto_close_date=asset_end_date,
-            first_traded=asset_start_date,
-            mic=None
-        ) for symbol in ALL_US_STOCK_SYMBOLS
-
-    ]
-
-    await asset_service.save_exchanges(
-        exchanges=[ExchangeInfo(exchange="LIME", canonical_name="LIME", country_code="US")])
-    await asset_service.save_currencies([usd_currency])
-    await asset_service.save_equities(equities)
-
-
-async def ingest_symbol_universes(asset_service: AssetService, asset_data_source: AssetDataSource):
-    """
-    Ingests default symbol universes by retrieving constituents of an index and saving the
-    constructed symbol universe.
-
-    Retrieves a list of constituents for the specified index from the provided asset data source.
-    It then obtains the corresponding equities for these symbols from the asset service. Finally,
-    a symbol universe is created and saved using the asset service.
-
-    Args:
-        asset_service (AssetService): Service responsible for asset-related operations, such as retrieving
-            equities by their symbols and saving symbol universes.
-        asset_data_source (AssetDataSource): Data source for retrieving asset-related information, such as
-            constituents for a specified index.
-
-    """
-    sp500 = await asset_data_source.get_constituents(index='SP500')
-    assets_symbols = list(sp500[0])
-
-    equities = await asset_service.get_equities_by_symbols(symbols=assets_symbols)
-    universe = SymbolsUniverse(
-        name="SP500",
-        universe_type="index",
-        symbol="SP500",
-        assets=equities
-    )
+    universe = await asset_data_source.get_symbol_universe(asset_service=asset_service, symbol_universe_name=symbol_universe_name)
     await asset_service.save_symbol_universe(symbol_universe=universe)
-
 
 async def ingest_market_data(
         start_date: datetime.datetime,

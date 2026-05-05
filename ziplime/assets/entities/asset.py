@@ -6,6 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Asset:
     sid: int | None  # if SID is None, then it is a new asset and we want it to have automatically assigned SID
+    isin: str | None
     asset_name: str
     start_date: datetime.date | None
     end_date: datetime.date | None

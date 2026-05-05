@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 import pathlib
+from zoneinfo import ZoneInfo
 
 import polars as pl
 import structlog
@@ -22,8 +23,9 @@ logger = structlog.get_logger(__name__)
 
 
 async def _run_simulation():
-    start_date = datetime.datetime(year=2020, month=1, day=3, tzinfo=pytz.timezone("America/New_York"))
-    end_date = datetime.datetime(year=2025, month=2, day=1, tzinfo=pytz.timezone("America/New_York"))
+    tz = ZoneInfo("America/New_York")
+    start_date = datetime.datetime(year=2025, month=2, day=3, tzinfo=tz)
+    end_date = datetime.datetime(year=2025, month=4, day=1, hour=23, minute=59 , second=59, tzinfo=tz)
     start_auction_delta = datetime.timedelta(minutes=15)
     end_auction_delta = datetime.timedelta(minutes=15)
     # Backtest completed in 3 seconds

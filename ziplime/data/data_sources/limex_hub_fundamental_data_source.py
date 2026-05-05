@@ -119,6 +119,7 @@ class LimexHubFundamentalDataSource(DataBundleSource):
                 if item is None:
                     continue
                 if len(item) > 0:
+                    item = item.select(final.columns)
                     final = pl.concat([final, item])
 
         return final

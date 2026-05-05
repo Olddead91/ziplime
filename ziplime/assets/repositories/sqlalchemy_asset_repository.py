@@ -24,6 +24,7 @@ from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.currency_symbol_mapping import CurrencySymbolMapping
 from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.entities.symbol_universe import SymbolsUniverse
+from ziplime.assets.entities.symbols_universe_asset import SymbolsUniverseAsset
 from ziplime.assets.models.asset_router import AssetRouter
 from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
@@ -188,7 +189,10 @@ class SqlAlchemyAssetRepository(AssetRepository):
             await session.commit()
             await session.refresh(symbol_universe_model)
             symbol_universe_assets = [
-                SymbolsUniverseAssetModel(symbol_universe_id=symbol_universe_model.id, asset_sid=asset.sid)
+                SymbolsUniverseAssetModel(symbol_universe_name=symbol_universe_model.name,
+                                          start_date=asset.start_date,
+                                          end_date=asset.end_date,
+                                          asset_sid=asset.asset.sid)
                 for asset in symbol_universe.assets
             ]
             session.add_all(symbol_universe_assets)
@@ -230,7 +234,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 end_date=equity.end_date,
                 asset_name=equity.asset_name,
                 auto_close_date=equity.auto_close_date,
-                mic=equity.mic
+                mic=equity.mic,
+                isin=equity.isin
             )
             assets_db.append(asset_db)
             for symbol_mapping in equity.symbol_mapping.values():
@@ -300,17 +305,27 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 selectinload(SymbolsUniverseModel.assets)
             )
             universes = list((await session.execute(q)).scalars())
-
+            assets_by_sids = {asset.sid: asset for asset in await self.get_assets_by_sids(
+                sids=list(set(asset.asset_sid for universe in universes for asset in universe.assets)))}
             res = {
                 universe.symbol:
                     SymbolsUniverse(
-                        assets=await self.get_assets_by_sids(sids=[asset.asset_sid for asset in universe.assets]),
+                        assets=[
+                            SymbolsUniverseAsset(
+                                symbol_universe_name=universe.name,
+                                asset=assets_by_sids[asset.asset_sid],
+                                start_date=asset.start_date,
+                                end_date=asset.end_date,
+                                ratio=asset.ratio
+                            )
+                            for asset in universe.assets
+
+                        ],
                         universe_type=universe.universe_type,
                         symbol=universe.symbol,
                         name=universe.name
                     )
-                for
-                universe in universes
+                for universe in universes
             }
         return res
 
@@ -352,12 +367,24 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 )
                 for equity_mapping in asset.equity_symbol_mappings
             },
-            mic=asset.mic
+            mic=asset.mic,
+            isin=asset.isin
         ) for asset in assets]
 
-    async def get_symbols_universe(self, symbol: str) -> SymbolsUniverse | None:
+    async def get_symbols_universe(self, name: str, dt: datetime.date) -> SymbolsUniverse | None:
         universes_by_symbol = await self.get_all_universes()
-        return universes_by_symbol.get(symbol, None)
+        universe =  universes_by_symbol.get(name, None)
+        if universe is None:
+            return universe
+        return SymbolsUniverse(
+            name=universe.name,
+            symbol=universe.symbol,
+            assets=[
+                asset for asset in universe.assets if asset.start_date <= dt and asset.end_date >= dt
+            ],
+            universe_type=universe.universe_type
+        )
+
 
     @aiocache.cached(cache=Cache.MEMORY)
     async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:
@@ -396,7 +423,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                     )
                     for currency_mapping in asset.currency_symbol_mappings
                 },
-                mic=asset.mic
+                mic=asset.mic,
+                isin=asset.isin
             ) for asset in assets]
 
     async def get_commodity_by_symbol(self, symbol: str) -> Commodity | None:
@@ -436,7 +464,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                     )
                     for equity_mapping in asset.equity_symbol_mappings
                 },
-                mic=asset.mic
+                mic=asset.mic,
+                isin=asset.isin
             ) for asset in assets]
 
     async def get_equities_by_symbols(self, symbols: list[str]) -> list[Equity]:
@@ -469,7 +498,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
                     )
                     for equity_mapping in asset.equity_symbol_mappings
                 },
-                mic=asset.mic
+                mic=asset.mic,
+                isin=asset.isin
             ) for asset in assets]
 
     async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:
@@ -1168,8 +1198,12 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 sids, starts, ends = zip(*result)
 
         sid = np.array(sids, dtype="i8")
-        start = np.array([datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s in starts], dtype="f8")
-        end = np.array([datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s in ends], dtype="f8")
+        start = np.array(
+            [datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s
+             in starts], dtype="f8")
+        end = np.array(
+            [datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s
+             in ends], dtype="f8")
         start[np.isnan(start)] = 0  # convert missing starts to 0
         end[np.isnan(end)] = np.iinfo(int).max  # convert missing end to INTMAX
         return Lifetimes(sid, start.astype("i8"), end.astype("i8"))
@@ -1231,12 +1265,15 @@ class SqlAlchemyAssetRepository(AssetRepository):
         ends = [asset.end_date for asset in assets]
 
         sid = np.array(sids, dtype="i8")
-        start = np.array([datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s in starts], dtype="f8")
-        end = np.array([datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s in ends], dtype="f8")
+        start = np.array(
+            [datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s
+             in starts], dtype="f8")
+        end = np.array(
+            [datetime.datetime.combine(s, datetime.datetime.min.time(), tzinfo=datetime.timezone.utc).timestamp() for s
+             in ends], dtype="f8")
         start[np.isnan(start)] = 0  # convert missing starts to 0
         end[np.isnan(end)] = np.iinfo(int).max  # convert missing end to INTMAX
         return Lifetimes(sid, start.astype("i8"), end.astype("i8"))
-
 
     async def asset_lifetimes(self, assets: list[Asset], dates: pd.DatetimeIndex, include_start_date: bool):
         """Compute a DataFrame representing asset lifetimes for the specified date

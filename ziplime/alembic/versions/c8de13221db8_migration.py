@@ -1,8 +1,8 @@
 """migration
 
-Revision ID: 498bbf0b3be2
+Revision ID: c8de13221db8
 Revises: 
-Create Date: 2025-09-15 10:09:29.906049
+Create Date: 2026-05-05 11:42:17.423132
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '498bbf0b3be2'
+revision = 'c8de13221db8'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -82,15 +82,15 @@ def upgrade():
     op.create_index(op.f('ix_stock_dividend_payouts_ex_date'), 'stock_dividend_payouts', ['ex_date'], unique=False)
     op.create_index(op.f('ix_stock_dividend_payouts_sid'), 'stock_dividend_payouts', ['sid'], unique=False)
     op.create_table('symbols_universe',
-    sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('symbol', sa.String(), nullable=False),
     sa.Column('universe_type', sa.String(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('name')
     )
     op.create_table('commodities',
     sa.Column('sid', sa.Integer(), nullable=False),
     sa.Column('mic', sa.String(), nullable=True),
+    sa.Column('isin', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
@@ -102,6 +102,7 @@ def upgrade():
     op.create_table('currencies',
     sa.Column('sid', sa.Integer(), nullable=False),
     sa.Column('mic', sa.String(), nullable=True),
+    sa.Column('isin', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
@@ -113,6 +114,7 @@ def upgrade():
     op.create_table('equities',
     sa.Column('sid', sa.Integer(), nullable=False),
     sa.Column('mic', sa.String(), nullable=True),
+    sa.Column('isin', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),
@@ -132,12 +134,14 @@ def upgrade():
     )
     op.create_index(op.f('ix_futures_root_symbols_exchange'), 'futures_root_symbols', ['exchange'], unique=False)
     op.create_table('symbols_universe_assets',
-    sa.Column('symbol_universe_id', sa.Integer(), nullable=False),
+    sa.Column('symbol_universe_name', sa.String(), nullable=False),
+    sa.Column('start_date', sa.Date(), nullable=False),
+    sa.Column('end_date', sa.Date(), nullable=True),
     sa.Column('asset_sid', sa.Integer(), nullable=False),
     sa.Column('ratio', sa.Numeric(precision=12, scale=8), nullable=True),
     sa.ForeignKeyConstraint(['asset_sid'], ['asset_router.sid'], ),
-    sa.ForeignKeyConstraint(['symbol_universe_id'], ['symbols_universe.id'], ),
-    sa.PrimaryKeyConstraint('symbol_universe_id', 'asset_sid')
+    sa.ForeignKeyConstraint(['symbol_universe_name'], ['symbols_universe.name'], ),
+    sa.PrimaryKeyConstraint('symbol_universe_name', 'start_date', 'asset_sid')
     )
     op.create_table('currency_symbol_mappings',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -191,6 +195,7 @@ def upgrade():
     sa.Column('exchange', sa.String(), nullable=False),
     sa.Column('sid', sa.Integer(), nullable=False),
     sa.Column('mic', sa.String(), nullable=True),
+    sa.Column('isin', sa.String(), nullable=True),
     sa.Column('asset_name', sa.String(), nullable=False),
     sa.Column('start_date', sa.Date(), nullable=False),
     sa.Column('end_date', sa.Date(), nullable=False),

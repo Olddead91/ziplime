@@ -688,6 +688,35 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         return [self.symbol(identifier, **kwargs) for identifier in args]
 
     @api_method
+    async def symbols_universe(self, name: str, dt: datetime.date = None):
+        """Lookup multuple Equities as a list.
+
+        Parameters
+        ----------
+        *args : iterable[str]
+            The ticker symbols to lookup.
+        country_code : str or None, optional
+            A country to limit symbol searches to.
+
+        Returns
+        -------
+        equities : list[ziplime.assets.Equity]
+            The equities that held the given ticker symbols on the current
+            symbol lookup date.
+
+        Raises
+        ------
+        SymbolNotFound
+            Raised when one of the symbols was not held on the current
+            lookup date.
+
+        See Also
+        --------
+        :func:`ziplime.api.set_symbol_lookup_date`
+        """
+        return await self.asset_service.get_symbols_universe(name=name, dt=dt or self.simulation_dt)
+
+    @api_method
     async def sid(self, sid: int) -> Asset | None:
         """Lookup an Asset by its unique asset identifier.
 

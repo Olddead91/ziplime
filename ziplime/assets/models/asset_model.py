@@ -13,6 +13,7 @@ class AssetModel(BaseModel):
 
     sid: Mapped[AssetRouterFKPK]
     mic: Mapped[str | None]
+    isin: Mapped[str | None]
     # asset_router = relationship(AssetRouter)
     asset_name: Mapped[str]
     start_date: Mapped[datetime.date]

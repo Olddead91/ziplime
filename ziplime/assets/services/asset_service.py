@@ -27,6 +27,7 @@ class AssetService:
 
     async def save_equities(self, equities: list[Equity]) -> None:
         await self._asset_repository.save_equities(equities=equities)
+
     async def save_symbol_universe(self, symbol_universe: SymbolsUniverse) -> None:
         await self._asset_repository.save_symbol_universe(symbol_universe=symbol_universe)
 
@@ -39,7 +40,8 @@ class AssetService:
     async def save_exchanges(self, exchanges: list[Exchange]) -> None:
         return await self._asset_repository.save_exchanges(exchanges=exchanges)
 
-    async def save_trading_pairs(self, trading_pairs: list[TradingPair]) -> None: ...
+    async def save_trading_pairs(self, trading_pairs: list[TradingPair]) -> None:
+        ...
 
     async def get_asset_by_sid(self, sid: int) -> Asset | None:
         return await self._asset_repository.get_asset_by_sid(sid=sid)
@@ -79,20 +81,20 @@ class AssetService:
 
     async def get_stock_dividends(self, sid: int, trading_days: pl.Series) -> list[Dividend]:
         return await self._adjustments_repository.get_stock_dividends(sid=sid,
-                                                                trading_days=trading_days)
+                                                                      trading_days=trading_days)
 
     async def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
         return await self._adjustments_repository.get_splits(assets=assets, dt=dt)
 
-    async def get_symbols_universe(self, symbol: str) -> SymbolsUniverse | None:
-        return await self._asset_repository.get_symbols_universe(symbol=symbol)
+    async def get_symbols_universe(self, name: str, dt: datetime.date) -> SymbolsUniverse | None:
+        return await self._asset_repository.get_symbols_universe(name=name, dt=dt)
 
     async def lifetimes(self, dates: pd.DatetimeIndex, include_start_date: bool, country_codes: list[str]):
         # normalize to a cache-key so that we can memoize results.
         lifetimes = await self._asset_repository.lifetimes(dates=dates, include_start_date=include_start_date,
-                                                     country_codes=country_codes)
+                                                           country_codes=country_codes)
 
-        raw_dates = dates.view('int64') // 10**9
+        raw_dates = dates.view('int64') // 10 ** 9
         if include_start_date:
             mask = lifetimes.start[None, :] <= raw_dates[:, None]
         else:
@@ -103,16 +105,15 @@ class AssetService:
     async def asset_lifetimes(self, assets: list[Asset], dates: pd.DatetimeIndex, include_start_date: bool):
         # normalize to a cache-key so that we can memoize results.
         lifetimes = await self._asset_repository.asset_lifetimes(dates=dates, include_start_date=include_start_date,
-                                                     assets=assets)
+                                                                 assets=assets)
 
-        raw_dates = dates.view('int64') // 10**9
+        raw_dates = dates.view('int64') // 10 ** 9
         if include_start_date:
             mask = lifetimes.start[None, :] <= raw_dates[:, None]
         else:
             mask = lifetimes.start[None, :] < raw_dates[:, None]
         mask &= raw_dates[:, None] <= lifetimes.end[None, :]
         return pd.DataFrame(mask, index=dates, columns=lifetimes.sid)
-
 
     async def retrieve_all(self, sids: list[int], default_none: bool = False):
         return await self._asset_repository.retrieve_all(sids=sids, default_none=default_none)

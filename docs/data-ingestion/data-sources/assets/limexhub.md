@@ -55,7 +55,10 @@ await ingest_assets(asset_service=asset_service, asset_data_source=asset_data_so
 Optionally, ingest also symbol universes data
 
 ```python
-await ingest_symbol_universes(asset_service=asset_service, asset_data_source=asset_data_source)
+await ingest_symbol_universe(asset_service=asset_service, asset_data_source=asset_data_source, symbol_universe_name="Q100US")
+await ingest_symbol_universe(asset_service=asset_service, asset_data_source=asset_data_source, symbol_universe_name="Q500US")
+await ingest_symbol_universe(asset_service=asset_service, asset_data_source=asset_data_source, symbol_universe_name="Q1500US")
+
 ```
 
 Now your assets are ready!
@@ -66,7 +69,7 @@ You can find the full working code below:
 import asyncio
 import logging
 
-from ziplime.core.ingest_data import get_asset_service, ingest_symbol_universes, ingest_assets
+from ziplime.core.ingest_data import get_asset_service, ingest_symbol_universe, ingest_assets
 from ziplime.data.data_sources.limex_hub_asset_data_source import LimexHubAssetDataSource
 from ziplime.utils.logging_utils import configure_logging
 
@@ -77,7 +80,9 @@ async def ingest_assets_data_limex_hub():
         clear_asset_db=True,
     )
     await ingest_assets(asset_service=asset_service, asset_data_source=asset_data_source)
-    await ingest_symbol_universes(asset_service=asset_service, asset_data_source=asset_data_source)
+    await ingest_symbol_universe(asset_service=asset_service, asset_data_source=asset_data_source, symbol_universe_name="Q100US")
+    await ingest_symbol_universe(asset_service=asset_service, asset_data_source=asset_data_source, symbol_universe_name="Q500US")
+    await ingest_symbol_universe(asset_service=asset_service, asset_data_source=asset_data_source, symbol_universe_name="Q1500US")
 
 
 if __name__ == "__main__":
