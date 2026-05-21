@@ -10,6 +10,7 @@ from exchange_calendars import ExchangeCalendar
 from ziplime.assets.domain.continuous_future import ContinuousFuture
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.constants.data_type import DataType
 from ziplime.constants.period import Period
 from ziplime.data.services.data_source import DataSource
@@ -271,7 +272,7 @@ class DataBundle(DataSource):
         return df_raw
 
     async def get_adjusted_value(
-            self, asset: Asset, field: str, dt: datetime.datetime, perspective_dt: datetime.datetime,
+            self, asset: ExchangeAsset, field: str, dt: datetime.datetime, perspective_dt: datetime.datetime,
             data_frequency: datetime.timedelta,
             spot_value: float = None
     ):
@@ -314,12 +315,12 @@ class DataBundle(DataSource):
 
         return spot_value
 
-    async def _get_adjustment_list(self, asset: Asset, adjustments_dict: dict[str, Any], table_name: str):
+    async def _get_adjustment_list(self, asset: ExchangeAsset, adjustments_dict: dict[str, Any], table_name: str):
         """Internal method that returns a list of adjustments for the given sid.
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset for which to return adjustments.
 
         adjustments_dict: dict

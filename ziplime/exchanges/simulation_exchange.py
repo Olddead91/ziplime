@@ -11,6 +11,7 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.constants.period import Period
 from ziplime.data.services.data_source import DataSource
@@ -67,11 +68,11 @@ class SimulationExchange(Exchange):
     def get_current_cash_balance(self) -> float:
         return self.cash_balance
 
-    def get_commission_model(self, asset: Asset) -> CommissionModel:
-        return self.commission_models[type(asset)]
+    def get_commission_model(self, asset: ExchangeAsset) -> CommissionModel:
+        return self.commission_models[type(asset.asset)]
 
-    def get_slippage_model(self, asset: Asset) -> SlippageModel:
-        return self.slippage_models[type(asset)]
+    def get_slippage_model(self, asset: ExchangeAsset) -> SlippageModel:
+        return self.slippage_models[type(asset.asset)]
 
     async def submit_order(self, order: Order):
         order.id = uuid.uuid4().hex

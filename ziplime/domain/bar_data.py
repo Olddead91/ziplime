@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import numpy as np
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_source import DataSource
@@ -245,7 +246,7 @@ class BarData:
         ]
         return pd.Series(data=tradeable, index=assets, dtype=bool)
 
-    def _can_trade_for_asset(self, asset: Asset, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
+    def _can_trade_for_asset(self, asset: ExchangeAsset, dt: datetime.datetime, adjusted_dt: datetime.datetime) -> bool:
         session_label = None
         dt_to_use_for_exchange_check = None
 

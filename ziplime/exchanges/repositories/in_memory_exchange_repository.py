@@ -24,8 +24,8 @@ class InMemoryExchangeRepository(ExchangeRepository):
     def get_all_exchanges_sync(self) -> list[Exchange]:
         return list(self._exchanges.values())
 
-    async def get_exchange_by_name(self, name: str) -> Exchange:
-        return self._exchanges[name]
+    async def get_exchange_by_mic(self, mic: str) -> Exchange:
+        return self._exchanges[mic]
 
     async def add_exchange(self, exchange: Exchange):
         self._exchanges[exchange.name] = exchange

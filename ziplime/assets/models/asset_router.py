@@ -7,5 +7,5 @@ from ziplime.core.db.base_model import BaseModel
 class AssetRouter(BaseModel):
     __tablename__ = "asset_router"
 
-    sid: Mapped[IntegerPK]
+    id: Mapped[IntegerPK]
     asset_type: Mapped[str]

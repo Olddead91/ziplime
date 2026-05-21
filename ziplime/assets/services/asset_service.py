@@ -6,10 +6,13 @@ import polars as pl
 from aiocache import Cache
 
 from ziplime.assets.domain.asset_type import AssetType
-from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.asset_symbol import AssetSymbol
+# from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.commodity import Commodity
 from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
+from ziplime.assets.entities.exchange_info import ExchangeInfo
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.models.dividend import Dividend
@@ -37,53 +40,59 @@ class AssetService:
     async def save_currencies(self, currencies: list[Currency]) -> None:
         await self._asset_repository.save_currencies(currencies=currencies)
 
-    async def save_exchanges(self, exchanges: list[Exchange]) -> None:
+    async def save_exchange_assets(self, exchange_assets: list[ExchangeAsset]) -> None:
+        await self._asset_repository.save_exchange_assets(exchange_assets=exchange_assets)
+
+    async def save_exchanges(self, exchanges: list[ExchangeInfo]) -> None:
         return await self._asset_repository.save_exchanges(exchanges=exchanges)
 
     async def save_trading_pairs(self, trading_pairs: list[TradingPair]) -> None:
         ...
 
-    async def get_asset_by_sid(self, sid: int) -> Asset | None:
+    async def get_asset_by_sid(self, sid: int) -> ExchangeAsset | None:
         return await self._asset_repository.get_asset_by_sid(sid=sid)
 
-    async def get_assets_by_sids(self, sids: list[int]) -> list[Asset]:
-        return await self._asset_repository.get_assets_by_sids(sids=sids)
+    async def get_assets_by_ids(self, ids: list[int]) -> list[ExchangeAsset]:
+        return await self._asset_repository.get_assets_by_ids(ids=ids)
 
-    async def get_equity_by_symbol(self, symbol: str, exchange_name: str) -> Equity | None:
+    async def get_equity_by_symbol(self, symbol: str, mic: str) -> Equity | None:
         return await self._asset_repository.get_equity_by_symbol(symbol=symbol,
-                                                                 exchange_name=exchange_name)
+                                                                 mic=mic)
 
     async def get_equities_by_symbols(self, symbols: list[str]) -> list[Equity]:
         return await self._asset_repository.get_equities_by_symbols(symbols=symbols)
 
-    async def get_equities_by_symbols_and_exchange(self, symbols: list[str], exchange_name: str) -> list[Equity]:
-        return await self._asset_repository.get_equities_by_symbols_and_exchange(symbols=symbols,
-                                                                                 exchange_name=exchange_name)
+    async def get_exchange_equities_by_symbols(self, symbols: list[AssetSymbol]) -> list[ExchangeAsset]:
+        return await self._asset_repository.get_exchange_equities_by_symbols(symbols=symbols)
+
+    async def get_equities_by_isins(self, isins: list[str]) -> list[Equity]:
+        return await self._asset_repository.get_equities_by_isins(isins=isins)
 
     @aiocache.cached(cache=Cache.MEMORY)
-    async def get_asset_by_symbol(self, symbol: str, asset_type: AssetType, exchange_name: str | None) -> Asset | None:
-        return await self._asset_repository.get_asset_by_symbol(symbol=symbol,
-                                                                asset_type=asset_type,
-                                                                exchange_name=exchange_name)
+    async def get_exchange_asset_by_symbol(self, symbol: AssetSymbol, asset_type: AssetType) -> ExchangeAsset | None:
+        return await self._asset_repository.get_exchange_asset_by_symbol(
+            symbol=symbol,
+            asset_type=asset_type
+        )
 
-    async def get_futures_contract_by_symbol(self, symbol: str, exchange_name: str) -> FuturesContract | None:
+    async def get_futures_contract_by_symbol(self, symbol: str, mic: str) -> FuturesContract | None:
         return await self._asset_repository.get_futures_contract_by_symbol(symbol=symbol,
-                                                                           exchange_name=exchange_name)
+                                                                           mic=mic)
 
     @aiocache.cached(cache=Cache.MEMORY)
-    async def get_currency_by_symbol(self, symbol: str, exchange_name: str) -> Currency | None:
+    async def get_currency_by_symbol(self, symbol: str, mic: str) -> Currency | None:
         return await self._asset_repository.get_currency_by_symbol(symbol=symbol,
-                                                                   exchange_name=exchange_name)
+                                                                   mic=mic)
 
-    async def get_commodity_by_symbol(self, symbol: str, exchange_name: str) -> Commodity | None:
+    async def get_commodity_by_symbol(self, symbol: str, mic: str) -> Commodity | None:
         return await self._asset_repository.get_commodity_by_symbol(symbol=symbol,
-                                                                    exchange_name=exchange_name)
+                                                                    mic=mic)
 
     async def get_stock_dividends(self, sid: int, trading_days: pl.Series) -> list[Dividend]:
         return await self._adjustments_repository.get_stock_dividends(sid=sid,
                                                                       trading_days=trading_days)
 
-    async def get_splits(self, assets: frozenset[Asset], dt: datetime.date):
+    async def get_splits(self, assets: frozenset[ExchangeAsset], dt: datetime.date):
         return await self._adjustments_repository.get_splits(assets=assets, dt=dt)
 
     async def get_symbols_universe(self, name: str, dt: datetime.date) -> SymbolsUniverse | None:
@@ -102,7 +111,7 @@ class AssetService:
         mask &= raw_dates[:, None] <= lifetimes.end[None, :]
         return pd.DataFrame(mask, index=dates, columns=lifetimes.sid)
 
-    async def asset_lifetimes(self, assets: list[Asset], dates: pd.DatetimeIndex, include_start_date: bool):
+    async def asset_lifetimes(self, assets: list[ExchangeAsset], dates: pd.DatetimeIndex, include_start_date: bool):
         # normalize to a cache-key so that we can memoize results.
         lifetimes = await self._asset_repository.asset_lifetimes(dates=dates, include_start_date=include_start_date,
                                                                  assets=assets)

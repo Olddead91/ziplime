@@ -13,6 +13,6 @@ class SymbolsUniverseAssetModel(BaseModel):
     symbol_universe_name: Mapped[SymbolsUniverseFKPK]
     start_date: Mapped[SymbolUniverseAssetStartDatePK]
     end_date: Mapped[datetime.date | None]
-    asset_sid: Mapped[AssetRouterFKPK]
+    asset_id: Mapped[AssetRouterFKPK]
     # asset_router = relationship(AssetRouter)
     ratio: Mapped[Decimal8 | None]

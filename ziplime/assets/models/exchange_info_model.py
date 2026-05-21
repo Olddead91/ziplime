@@ -4,9 +4,9 @@ from ziplime.core.db.annotated_types import StringPK
 from ziplime.core.db.base_model import BaseModel
 
 
-class ExchangeInfo(BaseModel):
+class ExchangeInfoModel(BaseModel):
     __tablename__ = "exchanges"
-
-    exchange: Mapped[StringPK]
+    mic: Mapped[StringPK]
+    name: Mapped[str]
     canonical_name: Mapped[str]
     country_code: Mapped[str]

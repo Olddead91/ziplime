@@ -11,4 +11,4 @@ class FuturesRootSymbol(BaseModel):
     root_symbol_id: Mapped[int]
     sector: Mapped[str]
     description: Mapped[str]
-    exchange: Mapped[ExchangeFK]
+    exchange_mic: Mapped[ExchangeFK]

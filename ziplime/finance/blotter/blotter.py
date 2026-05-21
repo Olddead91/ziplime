@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.finance.cancel_policy import NeverCancel
 
 from ziplime.finance.domain.order import Order
@@ -26,17 +26,17 @@ class Blotter(ABC):
     def get_order_by_id(self, order_id: str, exchange_name: str) -> Order | None: ...
 
     @abstractmethod
-    def get_open_orders_by_asset(self, asset: Asset, exchange_name: str) -> dict[str, Order] | None: ...
+    def get_open_orders_by_asset(self, asset: ExchangeAsset, exchange_name: str) -> dict[str, Order] | None: ...
 
     @abstractmethod
-    def get_open_orders(self,exchange_name: str) -> dict[Asset, dict[str, Order]]: ...
+    def get_open_orders(self,exchange_name: str) -> dict[ExchangeAsset, dict[str, Order]]: ...
 
     @abstractmethod
-    def get_all_assets_in_open_orders(self) -> list[Asset]: ...
+    def get_all_assets_in_open_orders(self) -> list[ExchangeAsset]: ...
 
 
     @abstractmethod
-    def cancel_all_orders_for_asset(self, asset: Asset, exchange_name:str, relay_status: bool = True) -> None: ...
+    def cancel_all_orders_for_asset(self, asset: ExchangeAsset, exchange_name:str, relay_status: bool = True) -> None: ...
 
     def batch_order(self, order_arg_lists):
         """Place a batch of orders.
@@ -65,7 +65,7 @@ class Blotter(ABC):
         raise NotImplementedError("execute_cancel_policy")
 
     @abstractmethod
-    def process_splits(self, splits: list[tuple[Asset, float]]) -> None:
+    def process_splits(self, splits: list[tuple[ExchangeAsset, float]]) -> None:
         """
         Processes a list of splits by modifying any open orders as needed.
 

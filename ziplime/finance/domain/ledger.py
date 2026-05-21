@@ -7,6 +7,7 @@ import pandas as pd
 import structlog
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.domain.account import Account
 from ziplime.domain.portfolio import Portfolio
@@ -319,7 +320,7 @@ class Ledger:
         self._cash_flow(-commission.amount)
         # print(f"Commission 3 for {asset.asset_name} is {cost}", tr.account.leverage, tr.account.net_leverage)
 
-    def close_position(self, asset: Asset, dt: datetime.datetime):
+    def close_position(self, asset: ExchangeAsset, dt: datetime.datetime):
         txn = self.position_tracker.maybe_create_close_position_transaction(
             asset=asset,
             dt=dt,

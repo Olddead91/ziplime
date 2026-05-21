@@ -4,6 +4,7 @@ import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.errors import (
     InvalidBenchmarkAsset,
@@ -25,7 +26,7 @@ class BenchmarkSource:
             emission_rate: datetime.timedelta,
             benchmark_fields: frozenset[str],
             precalculated_series: pl.Series,
-            benchmark_asset: Asset | None = None,
+            benchmark_asset: ExchangeAsset | None = None,
             benchmark_returns: pl.Series | None = None,
     ):
         self.asset_service = asset_service
@@ -116,7 +117,7 @@ class BenchmarkSource:
 
         return daily_returns.filter(pl.col("date").is_between(start, end))
 
-    async def validate_benchmark(self, benchmark_asset: Asset):
+    async def validate_benchmark(self, benchmark_asset: ExchangeAsset):
         # check if this security has a stock dividend.  if so, raise an
         # error suggesting that the user pick a different asset to use
         # as benchmark.

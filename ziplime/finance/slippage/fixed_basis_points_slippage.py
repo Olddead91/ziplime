@@ -2,6 +2,7 @@ import datetime
 import math
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.errors import LiquidityExceeded
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.domain.order import Order
@@ -81,7 +82,7 @@ class FixedBasisPointsSlippage(SlippageModel):
             shares_to_fill * order.direction,
         )
 
-    async def order_target_percentage_maximum_quantity(self, exchange: Exchange, dt: datetime.datetime, asset: Asset,
+    async def order_target_percentage_maximum_quantity(self, exchange: Exchange, dt: datetime.datetime, asset: ExchangeAsset,
                                 percentage: float,
                                 available_cash: float) -> tuple[float, float]:
 

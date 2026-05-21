@@ -20,6 +20,7 @@ from sys import float_info
 from numpy import isfinite
 import ziplime.utils.math_utils as zp_math
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.errors import BadOrderParameters
 from ziplime.trading.entities.orders.market_order_request import MarketOrderRequest
 from ziplime.trading.entities.trading_pair import TradingPair
@@ -50,7 +51,7 @@ class ExecutionStyle(metaclass=abc.ABCMeta):
     def to_order_type(self) -> OrderType:
         raise NotImplementedError("to_order_type not implemented for ExecutionStyle")
 
-    async def to_order_request(self, base_asset: Asset, quote_asset: Asset,
+    async def to_order_request(self, base_asset: ExchangeAsset, quote_asset: ExchangeAsset,
                                quantity: int,
                                creation_dt: datetime.datetime,
                                ): ...
@@ -75,7 +76,7 @@ class MarketOrder(ExecutionStyle):
     def to_order_type(self) -> OrderType:
         return OrderType.MARKET
 
-    async def to_order_request(self, base_asset: Asset, quote_asset: Asset,
+    async def to_order_request(self, base_asset: ExchangeAsset, quote_asset: ExchangeAsset,
                                quantity: int,
                                creation_dt: datetime.datetime,
                                ) -> MarketOrderRequest:

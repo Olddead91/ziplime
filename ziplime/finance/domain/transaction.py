@@ -1,7 +1,7 @@
 import datetime
 from dataclasses import dataclass
 
-from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 
 
 @dataclass
@@ -15,7 +15,7 @@ class Transaction:
 
 
     order_id: str = None
-    asset: Asset = None
+    asset: ExchangeAsset = None
     commission: float | None = None
     realized_pnl: float = 0.0
 

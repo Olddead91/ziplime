@@ -1,8 +1,8 @@
 import polars as pl
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_info import ExchangeInfo
 from ziplime.assets.entities.symbol_universe import SymbolsUniverse
-from ziplime.assets.models.exchange_info import ExchangeInfo
 from ziplime.assets.services.asset_service import AssetService
 
 

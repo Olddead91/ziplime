@@ -19,6 +19,8 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.asset_type import AssetType
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.asset_symbol import AssetSymbol
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.constants.logging_event import LoggingEvent, LoggingEvent
 from ziplime.core.algorithm_file import AlgorithmFile
@@ -609,15 +611,18 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     @api_method
     async def symbol(
-            self, symbol_str: str, asset_type: AssetType = AssetType.EQUITY,
-            exchange_name: str = None,
+            self,
+            symbol: str,
+            mic: str = None,
+            asset_type: AssetType = AssetType.EQUITY,
+            # exchange_name: str = None,
             country_code: str | None = None
-    ) -> Asset | None:
+    ) -> ExchangeAsset | None:
         """Lookup an Equity by its ticker symbol.
 
         Parameters
         ----------
-        symbol_str : str
+        symbol : str
             The ticker symbol for the equity to lookup.
         country_code : str or None, optional
             A country to limit symbol searches to.
@@ -646,16 +651,19 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # )
         # if exchange_name is None:
         #     exchange_name = self.default_exchange.name
-        if "@" in symbol_str:
-            symbol, exchange_name = symbol_str.split("@")
+        if "@" in symbol:
+            symbol, mic = symbol.split("@")
         else:
-            symbol = symbol_str
+            symbol = symbol
+            if mic is None:
+                raise ValueError("You must supply MIC or use symbol in format ticker@MIC")
 
-        asset = await self.asset_service.get_asset_by_symbol(symbol=symbol,
-                                                             asset_type=asset_type,
-                                                             exchange_name=exchange_name)
+        asset = await self.asset_service.get_exchange_asset_by_symbol(
+            symbol=AssetSymbol(symbol=symbol, mic=mic),
+            asset_type=asset_type,
+        )
         if asset is None:
-            raise SymbolNotFound(symbol=symbol_str)
+            raise SymbolNotFound(symbol=symbol)
         return asset
 
     @api_method
@@ -761,7 +769,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name or (await self.exchange_repository.get_default_exchange()).name
         )
 
-    async def _calculate_order_value_amount(self, asset: Asset, value: float, exchange: Exchange):
+    async def _calculate_order_value_amount(self, asset: ExchangeAsset, value: float, exchange: Exchange):
         """Calculates how many shares/contracts to order based on the type of
         asset being ordered.
         """
@@ -799,12 +807,12 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             self._logger.debug(f"Price of 0 for {asset}; can't infer value")
             # Don't place any order
             return 0
-        if type(asset) is FuturesContract:
+        if type(asset.asset) is FuturesContract:
             return value / (last_price * asset.multiplier)
         else:
             return value / last_price
 
-    def _can_order_asset(self, asset: Asset):
+    def _can_order_asset(self, asset: ExchangeAsset):
         if asset.auto_close_date:
             day = self.clock.trading_calendar.minute_to_session(self.simulation_dt).date()
 
@@ -858,14 +866,14 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order(self, asset: Asset, amount: int, style: ExecutionStyle,
+    async def order(self, asset: ExchangeAsset, amount: int, style: ExecutionStyle,
                     account_id: str | None = None,
                     exchange_name: str | None = None) -> Order | None:
         """Place an order for a fixed number of shares.
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset to be ordered.
         amount : int
             The amount of shares to order. If ``amount`` is positive, this is
@@ -905,7 +913,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange = await self.exchange_repository.get_default_exchange()
             exchange_name = exchange.name
         else:
-            exchange = await self.exchange_repository.get_exchange_by_name(name=exchange_name)
+            exchange = await self.exchange_repository.get_exchange_by_mic(mic=exchange_name)
         order_id = uuid.uuid4().hex[:20]
 
         order_qty_rounded = int(round_if_near_integer(amount))
@@ -926,11 +934,11 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             self._logger.warning("Not executing order for zero shares.")
             return None
 
-        quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",
-                                                                      exchange_name=exchange_name)
+        # quote_asset = await self.asset_service.get_currency_by_symbol(symbol="USD",
+        #                                                               exchange_name=exchange_name)
 
         self._logger.info(LoggingEvent.ORDER_SUBMIT, style=str(style), quantity=order_qty_rounded,
-                          symbol=asset.get_symbol_by_exchange(exchange_name),
+                          asset_symbol=asset.symbol, asset_mic=asset.mic,
                           simulation_dt=self.simulation_dt)
 
         submitted_order = await exchange.submit_order(order=order)
@@ -978,7 +986,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         self.new_orders[order.id] = order
         return order
 
-    def validate_order_params(self, asset: Asset, amount: int):
+    def validate_order_params(self, asset: ExchangeAsset, amount: int):
         """
         Helper method for validating parameters to the order API function.
 
@@ -1001,7 +1009,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
-    async def order_value(self, asset: Asset, value: float, limit_price: float | None = None,
+    async def order_value(self, asset: ExchangeAsset, value: float, limit_price: float | None = None,
                           stop_price: float | None = None,
                           style: ExecutionStyle | None = None,
                           exchange_name: str | None = None
@@ -1012,7 +1020,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset to be ordered.
         value : float
             Amount of value of ``asset`` to be transacted. The number of shares
@@ -1042,7 +1050,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         """
         if not self._can_order_asset(asset):
             return None
-        exchange = await self.exchange_repository.get_exchange_by_name(exchange_name) if exchange_name else (
+        exchange = await self.exchange_repository.get_exchange_by_mic(exchange_name) if exchange_name else (
             await self.exchange_repository.get_default_exchange()
         )
         amount = await self._calculate_order_value_amount(asset=asset, value=value, exchange=exchange)
@@ -1101,7 +1109,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         else:
             chunks = []
             for exchange_name, trading_accounts in self._ledger.position_tracker.positions.items():
-                exchange = await self.exchange_repository.get_exchange_by_name(name=exchange_name)
+                exchange = await self.exchange_repository.get_exchange_by_mic(mic=exchange_name)
                 assets = [asset for tr in trading_accounts.values() for asset in tr]
 
                 chunk = await exchange.get_spot_value(
@@ -1286,7 +1294,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_percent(
-            self, asset: Asset, percent: float, style: ExecutionStyle,
+            self, asset: ExchangeAsset, percent: float, style: ExecutionStyle,
             exchange_name: str | None = None
     ):
         """Place an order in the specified asset corresponding to the given
@@ -1294,7 +1302,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset that this order is for.
         percent : float
             The percentage of the portfolio value to allocate to ``asset``.
@@ -1320,7 +1328,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         """
         if not self._can_order_asset(asset=asset):
             return None
-        exchange = await self.exchange_repository.get_exchange_by_name(exchange_name) if exchange_name else (
+        exchange = await self.exchange_repository.get_exchange_by_mic(exchange_name) if exchange_name else (
             await self.exchange_repository.get_default_exchange()
         )
 
@@ -1332,7 +1340,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    async def _calculate_order_percent_amount(self, asset: Asset, percent: float, exchange: Exchange,
+    async def _calculate_order_percent_amount(self, asset: ExchangeAsset, percent: float, exchange: Exchange,
                                               reserved_percentage_for_fees: float = 0.00):
         # value = self.portfolio.portfolio_value * percent
         # return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
@@ -1362,7 +1370,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target(
-            self, asset: Asset, target: int, style: ExecutionStyle,
+            self, asset: ExchangeAsset, target: int, style: ExecutionStyle,
             exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target number of shares. If
@@ -1373,7 +1381,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset that this order is for.
         target : int
             The desired number of shares of ``asset``.
@@ -1416,7 +1424,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         """
         if not self._can_order_asset(asset=asset):
             return None
-        exchange = await self.exchange_repository.get_exchange_by_name(exchange_name) if exchange_name else (
+        exchange = await self.exchange_repository.get_exchange_by_mic(exchange_name) if exchange_name else (
             await self.exchange_repository.get_default_exchange()
         )
 
@@ -1433,7 +1441,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange_name=exchange_name
         )
 
-    def _calculate_order_target_amount(self, exchange: Exchange, trading_account_id: str, asset: Asset, target: int):
+    def _calculate_order_target_amount(self, exchange: Exchange, trading_account_id: str, asset: ExchangeAsset, target: int):
         current_position = self.portfolio.positions.get(exchange.name, {}).get(trading_account_id, {}).get(asset, None)
         if current_position is not None:
             # current_position = self.portfolio.positions[asset].amount
@@ -1444,7 +1452,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_value(
-            self, asset: Asset, target: float, style: ExecutionStyle,
+            self, asset: ExchangeAsset, target: float, style: ExecutionStyle,
             exchange_name: str | None = None
     ):
         """Place an order to adjust a position to a target value. If
@@ -1457,7 +1465,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset that this order is for.
         target : float
             The desired total value of ``asset``.
@@ -1493,7 +1501,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        exchange = await self.exchange_repository.get_exchange_by_name(exchange_name) if exchange_name else (
+        exchange = await self.exchange_repository.get_exchange_by_mic(exchange_name) if exchange_name else (
             await self.exchange_repository.get_default_exchange()
         )
 
@@ -1514,7 +1522,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     @api_method
     @disallowed_in_before_trading_start(OrderInBeforeTradingStart())
     async def order_target_percent(
-            self, asset: Asset, target: float,
+            self, asset: ExchangeAsset, target: float,
             style: ExecutionStyle, exchange_name: str | None = None,
             reserved_percentage_for_fees: float = 0.05
     ):
@@ -1526,7 +1534,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         Parameters
         ----------
-        asset : Asset
+        asset : ExchangeAsset
             The asset that this order is for.
         target : float
             The desired percentage of the portfolio value to allocate to
@@ -1569,7 +1577,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         if not self._can_order_asset(asset):
             return None
 
-        exchange = await self.exchange_repository.get_exchange_by_name(exchange_name) if exchange_name else (
+        exchange = await self.exchange_repository.get_exchange_by_mic(exchange_name) if exchange_name else (
             await self.exchange_repository.get_default_exchange())
 
         target_amount = await self._calculate_order_percent_amount(asset=asset, percent=target,
@@ -1655,7 +1663,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # along with newly placed orders.
 
         self.blotter.order_cancelled(order=order)
-        exchange = await self.exchange_repository.get_exchange_by_name(exchange_name) if exchange_name else (
+        exchange = await self.exchange_repository.get_exchange_by_mic(exchange_name) if exchange_name else (
             await self.exchange_repository.get_default_exchange()
         )
         await exchange.cancel_order(order_id=order.exchange_order_id)
@@ -1664,7 +1672,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         else:
             self.new_orders.pop(order.id, None)
 
-    async def cancel_all_orders_for_asset(self, asset: Asset, exchange_name: str, warn: bool = False,
+    async def cancel_all_orders_for_asset(self, asset: ExchangeAsset, exchange_name: str, warn: bool = False,
                                           relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
@@ -2294,7 +2302,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
            auto_close_date.
         """
 
-        def past_auto_close_date(asset: Asset):
+        def past_auto_close_date(asset: ExchangeAsset):
             acd = asset.auto_close_date
             if acd is not None:
                 acd = acd
@@ -2321,7 +2329,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
         for asset in assets_to_cancel:
             for exchange in await self.exchange_repository.get_all_exchanges():
-                await self.cancel_all_orders_for_asset(asset=asset, exchange_name=exchange)
+                await self.cancel_all_orders_for_asset(asset=asset, exchange_name=exchange.name)
 
         # Make a copy here so that we are not modifying the list that is being
         # iterated over.

@@ -8,7 +8,7 @@ class ExchangeRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_exchange_by_name(self, name: str) -> Exchange:
+    async def get_exchange_by_mic(self, mic: str) -> Exchange:
         pass
 
     @abstractmethod

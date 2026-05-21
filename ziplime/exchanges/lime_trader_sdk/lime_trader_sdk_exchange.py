@@ -10,6 +10,7 @@ from lime_trader.models.page import PageRequest
 from lime_trader.utils.pagination import iterate_pages_async
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.lime_trader_sdk_data_source import LimeTraderSdkDataSource
 from ziplime.domain.bar_data import BarData
@@ -150,7 +151,7 @@ class LimeTraderSdkExchange(Exchange):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails, asset: Asset) -> Order | None:
+    def _order2zp(self, order: OrderDetails, asset: ExchangeAsset) -> Order | None:
 
         match order.order_status:
             case LimeTraderOrderStatus.CANCELED:
@@ -451,13 +452,13 @@ class LimeTraderSdkExchange(Exchange):
 
         return order_details
 
-    def get_commission_model(self, asset: Asset) -> CommissionModel:
+    def get_commission_model(self, asset: ExchangeAsset) -> CommissionModel:
         pass
 
-    def get_slippage_model(self, asset: Asset) -> SlippageModel:
+    def get_slippage_model(self, asset: ExchangeAsset) -> SlippageModel:
         pass
 
-    def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
+    def get_scalar_asset_spot_value_sync(self, asset: ExchangeAsset, field: str, dt: datetime.datetime,
                                                frequency: datetime.timedelta):
         # quote = self._sync_lime_sdk_client.market.get_current_quote(
         #     symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
@@ -466,10 +467,10 @@ class LimeTraderSdkExchange(Exchange):
             exchange_name=self.name)
         return quote
 
-    async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
+    async def get_scalar_asset_spot_value(self, asset: ExchangeAsset, field: str, dt: datetime.datetime,
                                           frequency: datetime.timedelta):
         quote = await self._lime_sdk_client.market.get_current_quote(
-            symbol=asset.get_symbol_by_exchange(exchange_name=self.name))
+            symbol=asset.symbol)
         return getattr(quote, field)
 
     # async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str]):

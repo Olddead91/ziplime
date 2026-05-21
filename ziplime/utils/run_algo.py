@@ -4,6 +4,7 @@ import sys
 import structlog
 from typing import AsyncIterator
 from ziplime.assets.domain.asset_type import AssetType
+from ziplime.assets.entities.asset_symbol import AssetSymbol
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.data_source import DataSource
@@ -36,6 +37,7 @@ from ziplime.trading.trading_algorithm_execution_result import TradingAlgorithmE
 from ziplime.assets.entities.asset import Asset
 from exchange_calendars import ExchangeCalendar
 from ziplime.exchanges.repositories.exchange_repository import ExchangeRepository
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 
 logger = structlog.get_logger(__name__)
 
@@ -51,6 +53,7 @@ async def run_algorithm(
         exchange_repository: ExchangeRepository,
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
+        benchmark_asset_mic: str | None = "XNGS",
         benchmark_returns: pl.Series | None = None,
         max_leverage: float = 1.0,
         same_bar_execution: bool = True,
@@ -62,7 +65,9 @@ async def run_algorithm(
     tr = await _prepare_algorithm(algorithm=algorithm, asset_service=asset_service, print_algo=print_algo,
                                   metrics_set=metrics_set, custom_loader=custom_loader,
                                   clock=clock, custom_data_sources=custom_data_sources, stop_on_error=stop_on_error,
-                                  benchmark_asset_symbol=benchmark_asset_symbol, benchmark_returns=benchmark_returns,
+                                  benchmark_asset_symbol=benchmark_asset_symbol,
+                                  benchmark_asset_mic=benchmark_asset_mic,
+                                  benchmark_returns=benchmark_returns,
                                   max_leverage=max_leverage, same_bar_execution=same_bar_execution,
                                   exchange_repository=exchange_repository,
                                   price_used_in_order_execution=price_used_in_order_execution)
@@ -122,6 +127,7 @@ async def _prepare_algorithm(
         exchange_repository: ExchangeRepository,
         stop_on_error: bool = False,
         benchmark_asset_symbol: str | None = None,
+        benchmark_asset_mic: str | None = None,
         benchmark_returns: pl.Series | None = None,
         max_leverage: float = 1.0,
         same_bar_execution: bool = True,
@@ -161,10 +167,14 @@ async def _prepare_algorithm(
             symbol, mic = benchmark_asset_symbol.split("@")
         else:
             symbol = benchmark_asset_symbol
-            mic = None
-        benchmark_asset = await asset_service.get_asset_by_symbol(symbol=symbol,
-                                                                  asset_type=AssetType.EQUITY,
-                                                                  exchange_name=mic)
+            mic = benchmark_asset_mic
+        benchmark_asset = await asset_service.get_exchange_asset_by_symbol(
+            symbol=AssetSymbol(
+                symbol=symbol,
+                mic=mic
+            ),
+            asset_type=AssetType.EQUITY
+        )
         if benchmark_asset is None:
             raise ValueError(f"No asset found with symbol {benchmark_asset_symbol} for benchmark")
     benchmark_exchange = await exchange_repository.get_default_exchange()
@@ -213,8 +223,6 @@ async def _prepare_algorithm(
     for exchange in reversed(await exchange_repository.get_all_exchanges()):
         custom_data_sources.insert(0, exchange)
 
-
-
     tr = TradingAlgorithm(
         exchange_repository=exchange_repository,
         asset_service=asset_service,
@@ -250,13 +258,11 @@ async def _prepare_algorithm(
         max_leverage = MaxLeverage(max_leverage, fail_on_error=False)
         tr.register_account_control(control=max_leverage)
 
-
-
     return tr
 
 
 async def _initialize_precalculated_series(
-        asset: Asset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
+        asset: ExchangeAsset, trading_calendar: ExchangeCalendar, trading_days: pl.Series,
         exchange: Exchange,
         emission_rate: datetime.timedelta,
         sessions: pl.Series,

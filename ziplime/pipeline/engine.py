@@ -784,7 +784,7 @@ class SimplePipelineEngine(PipelineEngine):
             # Using this to convert np.records to tuples
             final_columns[name] = terms[name].postprocess(data[name][mask])
 
-        resolved_assets = array(await self._asset_service.get_assets_by_sids(sids=list(assets)))
+        resolved_assets = array(await self._asset_service.get_assets_by_ids(ids=list(assets)))
         index = _pipeline_output_index(dates, resolved_assets, mask)
         return pd.DataFrame(
             data=final_columns, index=index, columns=final_columns.keys()

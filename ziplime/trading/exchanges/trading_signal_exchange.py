@@ -8,6 +8,7 @@ from lime_trader.models.page import PageRequest
 from lime_trader.utils.pagination import iterate_pages_async
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.domain.bar_data import BarData
 
 from ziplime.domain.portfolio import Portfolio as ZpPortfolio
@@ -70,7 +71,7 @@ class TradingSignalExchange(Exchange):
         except Exception as _:
             return False
 
-    def _order2zp(self, order: OrderDetails, asset: Asset) -> Order | None:
+    def _order2zp(self, order: OrderDetails, asset: ExchangeAsset) -> Order | None:
 
         match order.order_status:
             case LimeTraderOrderStatus.CANCELED:
@@ -395,8 +396,8 @@ class TradingSignalExchange(Exchange):
 
         return order_details
 
-    def get_commission_model(self, asset: Asset) -> CommissionModel:
+    def get_commission_model(self, asset: ExchangeAsset) -> CommissionModel:
         pass
 
-    def get_slippage_model(self, asset: Asset) -> SlippageModel:
+    def get_slippage_model(self, asset: ExchangeAsset) -> SlippageModel:
         pass

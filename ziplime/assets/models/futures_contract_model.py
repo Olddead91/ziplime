@@ -15,4 +15,4 @@ class FuturesContractModel(AssetModel):
     expiration_date: Mapped[datetime.date]
     multiplier: Mapped[float]
     tick_size: Mapped[float]
-    exchange: Mapped[ExchangeFK]
+    exchange_mic: Mapped[ExchangeFK]

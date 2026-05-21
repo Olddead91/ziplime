@@ -1,6 +1,7 @@
 import datetime
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.exchanges.exchange import Exchange
 from ziplime.finance.slippage.slippage_model import SlippageModel
 
@@ -21,7 +22,8 @@ class NoSlippage(SlippageModel):
             order.amount,
         )
 
-    async def order_target_percentage_maximum_quantity(self, exchange: Exchange, dt: datetime.datetime, asset: Asset,
+    async def order_target_percentage_maximum_quantity(self, exchange: Exchange, dt: datetime.datetime,
+                                                       asset: ExchangeAsset,
                                                        percentage: float,
                                                        available_cash: float) -> tuple[float, float]:
         current_val = await exchange.get_spot_value(assets=frozenset({asset}), fields=frozenset({"close", "volume", }),

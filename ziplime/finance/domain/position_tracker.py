@@ -9,6 +9,7 @@ import numpy as np
 import structlog
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.models.dividend import Dividend
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.exchanges.exchange import Exchange
@@ -49,7 +50,7 @@ class PositionTracker:
 
     def update_position(
             self,
-            asset: Asset,
+            asset: ExchangeAsset,
             exchange_name: str,
             trading_account_id: str,
             amount: int | None = None,
@@ -160,7 +161,7 @@ class PositionTracker:
 
         position.amount = total_shares
 
-    def handle_commission(self, asset: Asset, cost: float) -> None:
+    def handle_commission(self, asset: ExchangeAsset, cost: float) -> None:
         # Adjust the cost basis of the stock if we own it
         if asset in self.positions:
             self._dirty_stats = True
@@ -249,7 +250,7 @@ class PositionTracker:
             "share_count": np.floor(position.amount * float(stock_dividend.ratio)),
         }
 
-    def handle_split(self, position: Position, asset: Asset, ratio: float):
+    def handle_split(self, position: Position, asset: ExchangeAsset, ratio: float):
         """
         Update the position by the split ratio, and return the resulting
         fractional share that will be converted into cash.
@@ -374,7 +375,7 @@ class PositionTracker:
 
         return net_cash_payment
 
-    def maybe_create_close_position_transaction(self, asset: Asset, dt: datetime.datetime):
+    def maybe_create_close_position_transaction(self, asset: ExchangeAsset, dt: datetime.datetime):
         if not self.positions.get(asset):
             return None
 

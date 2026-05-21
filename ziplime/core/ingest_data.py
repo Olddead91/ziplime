@@ -4,15 +4,16 @@ from pathlib import Path
 
 import asyncio
 from exchange_calendars import ExchangeCalendar
+from scipy.constants import micro
+
+from ziplime.assets.models.exchange_asset_model import ExchangeAssetModel
 from ziplime.utils.calendar_utils import get_calendar
 
 from ziplime.assets.domain.ordered_contracts import CHAIN_PREDICATES
 from ziplime.assets.entities.currency import Currency
-from ziplime.assets.entities.currency_symbol_mapping import CurrencySymbolMapping
 from ziplime.assets.entities.equity import Equity
-from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
 from ziplime.assets.entities.symbol_universe import SymbolsUniverse
-from ziplime.assets.models.exchange_info import ExchangeInfo
+from ziplime.assets.models.exchange_info_model import ExchangeInfoModel
 from ziplime.assets.repositories.sqlalchemy_adjustments_repository import SqlAlchemyAdjustmentRepository
 from ziplime.assets.repositories.sqlalchemy_asset_repository import SqlAlchemyAssetRepository
 from ziplime.assets.services.asset_service import AssetService
@@ -23,7 +24,7 @@ from ziplime.data.services.bundle_service import BundleService
 from ziplime.data.services.data_bundle_source import DataBundleSource
 from ziplime.data.services.file_system_bundle_registry import FileSystemBundleRegistry
 from ziplime.data.services.file_system_parquet_bundle_storage import FileSystemParquetBundleStorage
-
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 
 def get_asset_service(db_path: str = str(Path(Path.home(), ".ziplime", "assets.sqlite").absolute()),
                       clear_asset_db: bool = False) -> AssetService:
@@ -51,6 +52,7 @@ def get_asset_service(db_path: str = str(Path(Path.home(), ".ziplime", "assets.s
     asset_service = AssetService(asset_repository=assets_repository, adjustments_repository=adjustments_repository)
     return asset_service
 
+
 async def ingest_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
     """
     Ingests and saves assets into the given asset service using data from the specified
@@ -74,30 +76,9 @@ async def ingest_assets(asset_service: AssetService, asset_data_source: AssetDat
     exchanges = await asset_data_source.get_exchanges()
     if len(exchanges) > 0:
         await asset_service.save_exchanges(exchanges=exchanges)
-    assets = await asset_data_source.get_assets()
-
-    currencies = [Currency(
-        asset_name="USD",
-        symbol_mapping={
-            exchange.exchange: CurrencySymbolMapping(
-                symbol="USD",
-                exchange_name=exchange.exchange,
-                start_date=asset_start_date,
-                end_date=asset_end_date
-            )
-        },
-        sid=None,
-        start_date=asset_start_date,
-        end_date=asset_end_date,
-        auto_close_date=asset_end_date,
-        first_traded=asset_start_date,
-        mic=exchange.exchange,
-        isin=None
-    ) for exchange in exchanges]
-
-
-    await asset_service.save_currencies(currencies=currencies)
-    await asset_service.save_equities(equities=assets)
+    exchange_assets = await asset_data_source.get_assets(exchanges=exchanges)
+    await asset_service.save_exchange_assets(exchange_assets=exchange_assets)
+    # await asset_service.save_equities(equities=assets)
 
 
 # async def ingest_default_assets(asset_service: AssetService, asset_data_source: AssetDataSource):
@@ -180,8 +161,10 @@ async def ingest_symbol_universe(asset_service: AssetService, asset_data_source:
         asset_data_source: Data source for retrieving index constituents.
         symbol_universe_name: The name or identifier of the index to ingest.
     """
-    universe = await asset_data_source.get_symbol_universe(asset_service=asset_service, symbol_universe_name=symbol_universe_name)
+    universe = await asset_data_source.get_symbol_universe(asset_service=asset_service,
+                                                           symbol_universe_name=symbol_universe_name)
     await asset_service.save_symbol_universe(symbol_universe=universe)
+
 
 async def ingest_market_data(
         start_date: datetime.datetime,

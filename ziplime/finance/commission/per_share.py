@@ -1,4 +1,5 @@
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.finance.commission import calculate_per_unit_commission
 from ziplime.finance.commission.equity_commission_model import EquityCommissionModel
 
@@ -49,5 +50,5 @@ class PerShare(EquityCommissionModel):
             min_trade_cost=self.min_trade_cost,
         )
 
-    def calculate_for_asset(self, asset: Asset, quantity: int) -> float:
+    def calculate_for_asset(self, asset: ExchangeAsset, quantity: int) -> float:
         return max(self.min_trade_cost, abs(quantity * self.cost_per_share))

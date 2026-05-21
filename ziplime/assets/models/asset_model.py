@@ -11,10 +11,9 @@ class AssetModel(BaseModel):
     __tablename__ = "assets"
     __abstract__ = True
 
-    sid: Mapped[AssetRouterFKPK]
-    mic: Mapped[str | None]
+    id: Mapped[AssetRouterFKPK]
     isin: Mapped[str | None]
-    # asset_router = relationship(AssetRouter)
+
     asset_name: Mapped[str]
     start_date: Mapped[datetime.date]
     end_date: Mapped[datetime.date]
@@ -23,10 +22,10 @@ class AssetModel(BaseModel):
 
     @declared_attr  # type: ignore [misc]
     def asset_router(cls):
-        return relationship("AssetRouter", foreign_keys=f"{cls.__name__}.sid")
+        return relationship("AssetRouter", foreign_keys=f"{cls.__name__}.id")
 
     def __hash__(self):
-        return self.sid
+        return self.id
 
     @abstractmethod
     def get_symbol_by_exchange(self, exchange_name: str | None) -> str | None: ...

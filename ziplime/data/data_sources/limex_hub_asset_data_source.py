@@ -9,13 +9,15 @@ import structlog
 import polars as pl
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
-from ziplime.assets.entities.equity_symbol_mapping import EquitySymbolMapping
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
+from ziplime.assets.entities.exchange_info import ExchangeInfo
 from ziplime.assets.entities.symbol_universe import SymbolsUniverse
 from ziplime.assets.entities.symbols_universe_asset import SymbolsUniverseAsset
-from ziplime.assets.models.exchange_info import ExchangeInfo
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.data.data_sources.asset_data_source import AssetDataSource
+from ziplime.exchanges.exchange import Exchange
 
 
 class LimexHubAssetDataSource(AssetDataSource):
@@ -29,9 +31,9 @@ class LimexHubAssetDataSource(AssetDataSource):
         else:
             self._maximum_threads = multiprocessing.cpu_count() * 2
 
-    async def get_assets(self, **kwargs) -> list[Asset]:
+    async def get_assets(self, exchanges: list[ExchangeInfo], **kwargs) -> list[ExchangeAsset]:
         assets = self._limex_client.instruments()
-
+        exchanges_by_code = {exchange.mic: exchange for exchange in exchanges}
         assets_df = pl.from_dataframe(assets)
         assets_df = assets_df.rename({
             "ticker": "symbol"
@@ -42,44 +44,80 @@ class LimexHubAssetDataSource(AssetDataSource):
         equities = [
             Equity(
                 asset_name=asset["symbol"],
-                symbol_mapping={
-                    "LIME": EquitySymbolMapping(
-                        symbol=asset["symbol"],
-                        exchange_name="LIME",
-                        start_date=asset_start_date,
-                        end_date=asset_end_date,
-                        company_symbol="",
-                        share_class_symbol=""
-                    )
-                },
-                sid=None,
+                id=None,
                 start_date=asset_start_date,
                 end_date=asset_end_date,
                 auto_close_date=asset_end_date,
                 first_traded=asset_start_date,
-                mic="LIME",
                 isin=asset["isin"]
             ) for asset in assets_df.iter_rows(named=True)
         ]
 
-        return equities
+        currencies = [Currency(
+            asset_name=currency,
+            id=None,
+            start_date=asset_start_date,
+            end_date=asset_end_date,
+            auto_close_date=asset_end_date,
+            first_traded=asset_start_date,
+            isin=None
+        ) for currency in assets_df["currency"].unique()]
+
+        exchange_currencies = [
+            ExchangeAsset(
+                sid=None,
+                symbol=currency.asset_name,
+                exchange=exchange,
+                start_date=asset_start_date,
+                end_date=asset_end_date,
+                auto_close_date=asset_end_date,
+                first_traded=asset_start_date,
+                external_id=currency.asset_name,
+                asset=currency
+            )
+            for exchange in exchanges
+            for currency in currencies
+        ]
+
+        exchange_assets = [
+            ExchangeAsset(
+                sid=None,
+                symbol=asset_df["symbol"],
+                exchange=exchanges_by_code.get(asset_df["mic"], exchanges_by_code[""]),
+                start_date=asset_start_date,
+                end_date=asset_end_date,
+                auto_close_date=asset_end_date,
+                first_traded=asset_start_date,
+                asset=asset,
+                external_id=asset_df["symbol"]
+            )
+            for asset, asset_df in zip(equities, assets_df.iter_rows(named=True))
+        ]
+
+        exchange_assets.extend(exchange_currencies)
+        return exchange_assets
 
     async def get_exchanges(self, **kwargs) -> list[ExchangeInfo]:
-        exchanges = [ExchangeInfo(exchange="LIME", canonical_name="LIME", country_code="US")]
+        assets = self._limex_client.instruments()
+        exchanges = [
+            ExchangeInfo(mic=mic, name=mic, canonical_name=mic, country_code="US")
+            for mic in assets["mic"].unique().tolist() if mic is not None
+        ]
         return exchanges
 
     async def get_symbol_universe(self, asset_service: AssetService, symbol_universe_name: str) -> SymbolsUniverse:
         assets = self._limex_client.constituents(universe=symbol_universe_name)
         symbols = list(set(assets["ticker"]))
-        equities = await asset_service.get_equities_by_symbols(symbols=symbols)
+        isins = list(set(assets["isin"]))
+        equities = await asset_service.get_equities_by_isins(isins=isins)
 
-        assets_by_symbol = {asset.get_symbol_by_exchange(None): asset for asset in equities}
+        assets_by_isin = {asset.isin: asset for asset in equities}
 
         universe_assets = []
         for row in assets.itertuples():
-            asset = assets_by_symbol.get(row.ticker, None)
+            asset = assets_by_isin.get(row.isin, None)
             if asset is None:
-                self._logger.warning(f"Asset {row.ticker} does not exist in assets database. Skipping.")
+                self._logger.warning(f"Asset {row.ticker}-{row.isin} does not exist in assets database. Skipping.")
                 continue
             universe_assets.append(SymbolsUniverseAsset(
                 symbol_universe_name=symbol_universe_name,

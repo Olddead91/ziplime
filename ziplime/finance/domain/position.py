@@ -18,13 +18,12 @@ Position Tracking
 import dataclasses
 import datetime
 
-from ziplime.assets.entities.asset import Asset
-from ziplime.exchanges.exchange import Exchange
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 
 
 @dataclasses.dataclass
 class Position:
-    asset: Asset
+    asset: ExchangeAsset
     exchange_name: str
     trading_account_id: str
     amount: int

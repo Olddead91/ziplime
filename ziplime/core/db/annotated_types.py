@@ -31,13 +31,13 @@ BooleanDefaultFalse = Annotated[bool, mapped_column(default=False, server_defaul
 IntegerDefaultZero = Annotated[int, mapped_column(default=0, server_default="0")]
 IntegerIndexed = Annotated[int, mapped_column(index=True)]
 
-ExchangeFK = Annotated[str, mapped_column(ForeignKey("exchanges.exchange"), index=True)]
-EquityFK = Annotated[int, mapped_column(ForeignKey("equities.sid"), index=True)]
-AssetFK = Annotated[int, mapped_column(ForeignKey("assets.sid"), index=True)]
-AssetRouterFK = Annotated[int, mapped_column(ForeignKey("asset_router.sid"), index=True)]
-CurrencyFK = Annotated[int, mapped_column(ForeignKey("currencies.sid"), index=True)]
+ExchangeFK = Annotated[str, mapped_column(ForeignKey("exchanges.mic"), index=True)]
+EquityFK = Annotated[int, mapped_column(ForeignKey("equities.id"), index=True)]
+AssetFK = Annotated[int, mapped_column(ForeignKey("assets.id"), index=True)]
+AssetRouterFK = Annotated[int, mapped_column(ForeignKey("asset_router.id"), index=True)]
+CurrencyFK = Annotated[int, mapped_column(ForeignKey("currencies.id"), index=True)]
 
-AssetRouterFKPK = Annotated[int, mapped_column(ForeignKey("asset_router.sid"), primary_key=True)]
+AssetRouterFKPK = Annotated[int, mapped_column(ForeignKey("asset_router.id"), primary_key=True)]
 SymbolsUniverseFKPK = Annotated[str, mapped_column(ForeignKey("symbols_universe.name"), primary_key=True)]
 SymbolUniverseAssetStartDatePK = Annotated[datetime.date, mapped_column(primary_key=True)]
 

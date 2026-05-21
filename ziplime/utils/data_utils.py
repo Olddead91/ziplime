@@ -6,6 +6,7 @@ from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.constants.period import Period
+from ziplime.assets.entities.asset_symbol import AssetSymbol
 
 _logger = structlog.get_logger(__name__)
 async def _process_data(data: pl.DataFrame,
@@ -88,8 +89,10 @@ async def _process_data(data: pl.DataFrame,
 
 async def backfill_sid_data(data: pl.DataFrame, asset_service: AssetService, required_sessions: pl.Series):
     unique_symbols = list(data["symbol"].unique())
-    symbol_to_sid = {a.get_symbol_by_exchange(exchange_name=None): a.sid for a in
-                     await asset_service.get_equities_by_symbols(unique_symbols)}
+    symbol_to_sid = {a.symbol: a.sid for a in
+                     await asset_service.get_exchange_equities_by_symbols(
+                         symbols=[AssetSymbol(symbol=symbol, mic="XNGS") for symbol in unique_symbols]
+                     )}
     data = data.with_columns(
         pl.lit(0).alias("sid"),
     )

@@ -16,6 +16,7 @@ from ziplime.data.services.bundle_storage import BundleStorage
 from ziplime.utils.class_utils import load_class
 from ziplime.utils.date_utils import period_to_timedelta
 from ziplime.utils.data_utils import backfill_sid_data
+from ziplime.assets.entities.asset_symbol import AssetSymbol
 
 class BundleService:
     """
@@ -272,7 +273,7 @@ class BundleService:
             return
 
         required_columns = [
-            "date", "symbol", "exchange", "exchange_country", "open", "high", "low", "close", "volume"
+            "date", "symbol", "mic", "open", "high", "low", "close", "volume"
         ]
         missing = [c for c in required_columns if c not in data.columns]
 
@@ -295,15 +296,13 @@ class BundleService:
         ).agg()
 
         equities_by_exchange = data.select(
-            "symbol", "exchange", "exchange_country"
-        ).group_by("exchange", "exchange_country").agg(pl.col("symbol").unique())
+            "symbol", "mic"
+        ).group_by("mic").agg(pl.col("symbol").unique())
         for row in equities_by_exchange.iter_rows(named=True):
-            exchange_name = row["exchange"]
-            exchange_country = row["exchange_country"]
+            exchange_mic = row["mic"]
             symbols = row["symbol"]
-            equities = await asset_service.get_equities_by_symbols_and_exchange(symbols=symbols,
-                                                                                exchange_name=exchange_name)
-            symbol_to_sid = {e.get_symbol_by_exchange(exchange_name=exchange_name): e.sid for e in equities}
+            equities = await asset_service.get_exchange_equities_by_symbols(symbols=[AssetSymbol(mic=exchange_mic, symbol=symbol) for symbol in symbols])
+            symbol_to_sid = {e.symbol: e.sid for e in equities}
 
             for symbol in symbols:
                 symbol_data = data.filter(symbol=symbol).with_columns(pl.col("date"))
@@ -311,8 +310,7 @@ class BundleService:
                 if len(missing_sessions) > 0:
                     self._logger.warning(
                         f"Data for symbol {symbol} is missing on ticks ({len(missing_sessions)}): {[missing_session.isoformat() for missing_session in missing_sessions]}")
-                    new_rows_df = pl.DataFrame({"date": missing_sessions, "symbol": symbol, "exchange": exchange_name,
-                                                "exchange_country": exchange_country},
+                    new_rows_df = pl.DataFrame({"date": missing_sessions, "symbol": symbol, "mic": exchange_mic},
                                                schema_overrides={"date": data.schema["date"]})
 
                     # Concatenate with the original DataFrame
@@ -323,14 +321,14 @@ class BundleService:
 
             data = data.with_columns(
                 pl.when(
-                    pl.col("exchange") == exchange_name
+                    pl.col("mic") == exchange_mic
                 ).then(
                     pl.col("symbol").replace(symbol_to_sid).cast(pl.Int64, strict=False)
                 ).otherwise(
                     pl.col("sid")
                 )
                 .alias("sid")
-            ).sort(["exchange","sid", "date"])
+            ).sort(["mic","sid", "date"])
         if forward_fill_missing_ohlcv_data:
             data = data.with_columns(pl.col("close", "price").fill_null(strategy="forward"))
             data = data.with_columns(pl.col("high", "low", "open").fill_null(pl.col("price")))

@@ -5,6 +5,7 @@ from abc import abstractmethod, ABC
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_source import DataSource
 
@@ -49,7 +50,7 @@ class Exchange(DataSource, ABC):
         return []
 
     @abstractmethod
-    async def get_positions(self) -> dict[Asset, Position]:
+    async def get_positions(self) -> dict[ExchangeAsset, Position]:
         ...
 
     @abstractmethod
@@ -76,7 +77,7 @@ class Exchange(DataSource, ABC):
         ...
 
     @abstractmethod
-    async def get_transactions(self, orders: dict[Asset, dict[str, Order]], current_dt: datetime.datetime,
+    async def get_transactions(self, orders: dict[ExchangeAsset, dict[str, Order]], current_dt: datetime.datetime,
                                same_bar_execution: bool):
         ...
 
@@ -93,41 +94,41 @@ class Exchange(DataSource, ABC):
         ...
 
     @abstractmethod
-    def get_last_traded_dt(self, asset):
+    def get_last_traded_dt(self, asset: ExchangeAsset):
         ...
 
     @abstractmethod
-    async def get_spot_value(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime,
+    async def get_spot_value(self, assets: frozenset[ExchangeAsset], fields: frozenset[str], dt: datetime.datetime,
                              data_frequency: datetime.timedelta | Period = None):
         ...
 
     @abstractmethod
-    def get_slippage_model(self, asset: Asset):
+    def get_slippage_model(self, asset: ExchangeAsset):
         ...
 
     @abstractmethod
-    def get_commission_model(self, asset: Asset) -> CommissionModel:
+    def get_commission_model(self, asset: ExchangeAsset) -> CommissionModel:
         ...
 
     # @abstractmethod
-    # async def get_scalar_asset_spot_value(self, asset: Asset, field: str, dt: datetime.datetime,
+    # async def get_scalar_asset_spot_value(self, asset: ExchangeAsset, field: str, dt: datetime.datetime,
     #                                       frequency: datetime.timedelta): ...
 
     # @abstractmethod
-    # def get_scalar_asset_spot_value_sync(self, asset: Asset, field: str, dt: datetime.datetime,
+    # def get_scalar_asset_spot_value_sync(self, asset: ExchangeAsset, field: str, dt: datetime.datetime,
     #                                      frequency: datetime.timedelta): ...
 
     # @abstractmethod
-    # async def get_spot_values(self, assets: frozenset[Asset], fields: frozenset[str]): ...
+    # async def get_spot_values(self, assets: frozenset[ExchangeAsset], fields: frozenset[str]): ...
 
     # @abstractmethod
-    # async def current(self, assets: frozenset[Asset], fields: frozenset[str], dt: datetime.datetime = None): ...
+    # async def current(self, assets: frozenset[ExchangeAsset], fields: frozenset[str], dt: datetime.datetime = None): ...
 
     async def get_data_by_limit(self, fields: frozenset[str],
                                 limit: int,
                                 end_date: datetime.datetime,
                                 frequency: datetime.timedelta,
-                                assets: frozenset[Asset],
+                                assets: frozenset[ExchangeAsset],
                                 include_end_date: bool,
                                 ) -> pl.DataFrame:
         ...

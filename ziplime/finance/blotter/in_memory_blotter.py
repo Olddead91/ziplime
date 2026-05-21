@@ -9,6 +9,7 @@ from ziplime.domain.bar_data import BarData
 from ziplime.finance.domain.order import Order
 from ziplime.exchanges.exchange import Exchange
 from ...assets.entities.asset import Asset
+from ...assets.entities.exchange_asset import ExchangeAsset
 from ...exchanges.repositories.exchange_repository import ExchangeRepository
 
 
@@ -80,16 +81,16 @@ class InMemoryBlotter(Blotter):
     def get_order_by_id(self, order_id: str, exchange_name: str) -> Order | None:
         return self.orders.get(exchange_name, {}).get(order_id, None)
 
-    def get_open_orders_by_asset(self, asset: Asset, exchange_name: str) -> dict[str, Order] | None:
+    def get_open_orders_by_asset(self, asset: ExchangeAsset, exchange_name: str) -> dict[str, Order] | None:
         return self.open_orders.get(exchange_name, {}).get(asset, None)
 
-    def get_open_orders(self, exchange_name: str) -> dict[Asset, dict[str, Order]]:
+    def get_open_orders(self, exchange_name: str) -> dict[ExchangeAsset, dict[str, Order]]:
         return self.open_orders.get(exchange_name, {})
 
-    def get_all_assets_in_open_orders(self) -> list[Asset]:
+    def get_all_assets_in_open_orders(self) -> list[ExchangeAsset]:
         return [asset for asset_orders in self.open_orders.values() for asset in asset_orders]
 
-    def cancel_all_orders_for_asset(self, asset: Asset, exchange_name: str, relay_status: bool = True):
+    def cancel_all_orders_for_asset(self, asset: ExchangeAsset, exchange_name: str, relay_status: bool = True):
         """
         Cancel all open orders for a given asset.
         """
