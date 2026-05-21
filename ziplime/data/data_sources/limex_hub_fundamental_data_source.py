@@ -39,8 +39,57 @@ fundamental_data_fields = [
     "trading_activity",
     "value",
     "volatility"
-    ]
+]
 
+def _normalize_fundamental_result(
+    df: pl.DataFrame,
+    date_from: datetime.datetime,
+    date_to: datetime.datetime,
+    symbol: str,
+) -> pl.DataFrame:
+    if len(df) == 0:
+        return df
+
+    if "date" not in df.columns:
+        raise ValueError("Fundamental response is missing required column 'date'.")
+
+    df = df.with_columns(
+        pl.lit(symbol).alias("symbol"),
+        date=pl.col("date").cast(pl.Datetime, strict=False).dt.replace_time_zone(str(date_from.tzinfo)),
+    ).filter(pl.col("date") >= date_from, pl.col("date") <= date_to)
+
+    if len(df) == 0:
+        return df
+
+    if "field" in df.columns and "value" in df.columns:
+        df = df.pivot(
+            on="field",
+            index=["date", "symbol"],
+            values="value",
+            aggregate_function="last",
+        )
+    else:
+        keep_columns = ["date", "symbol"]
+        if "period" in df.columns:
+            keep_columns.append("period")
+        keep_columns.extend([field for field in fundamental_data_fields if field in df.columns])
+        df = df.select(keep_columns).unique(subset=["date", "symbol"], keep="last")
+
+    if "period" in df.columns:
+        df = df.with_columns(pl.col("period").cast(pl.Utf8, strict=False))
+
+    for field in fundamental_data_fields:
+        if field not in df.columns:
+            df = df.with_columns(pl.lit(None, dtype=pl.Float64).alias(field))
+        else:
+            df = df.with_columns(pl.col(field).cast(pl.Float64, strict=False))
+
+    ordered_columns = ["date", "symbol"]
+    if "period" in df.columns:
+        ordered_columns.append("period")
+    ordered_columns.extend(fundamental_data_fields)
+
+    return df.select(ordered_columns).sort(["symbol", "date"])
 
 def fetch_fundamental_data_task(date_from: datetime.datetime,
                                 date_to: datetime.datetime,
@@ -65,15 +114,12 @@ def fetch_fundamental_data_task(date_from: datetime.datetime,
     if len(df) == 0:
         return df
 
-    # Pivot: field column → separate columns, values from "value"
-    df = df.pivot(
-        on="field",
-        index=["date", "symbol"],
-        values="value",
-        aggregate_function="last",
-    ).sort(["symbol", "date"])
-
-    return df
+    return _normalize_fundamental_result(
+        df=df,
+        date_from=date_from,
+        date_to=date_to,
+        symbol=symbol,
+    )
 
 
 class LimexHubFundamentalDataSource(DataBundleSource):
@@ -118,9 +164,10 @@ class LimexHubFundamentalDataSource(DataBundleSource):
                 pbar.update(total_days)
                 if item is None:
                     continue
-                if len(item) > 0:
-                    item = item.select(final.columns)
-                    final = pl.concat([final, item])
+                if item is None or len(item) == 0:
+                    continue
+                item = item.select(final.columns)
+                final = pl.concat([final, item], how="diagonal_relaxed")
 
         return final
 
