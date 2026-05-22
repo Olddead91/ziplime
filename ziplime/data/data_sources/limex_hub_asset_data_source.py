@@ -32,19 +32,18 @@ class LimexHubAssetDataSource(AssetDataSource):
             self._maximum_threads = multiprocessing.cpu_count() * 2
 
     async def get_assets(self, exchanges: list[ExchangeInfo], **kwargs) -> list[ExchangeAsset]:
-        assets = self._limex_client.instruments()
         exchanges_by_code = {exchange.mic: exchange for exchange in exchanges}
-        assets_df = pl.from_dataframe(assets)
-        assets_df = assets_df.rename({
-            "ticker": "symbol"
-        })
+        assets_df = self._fetch_all_instruments()
         asset_start_date = datetime.datetime(year=1900, month=1, day=1, tzinfo=datetime.timezone.utc)
         asset_end_date = datetime.datetime(year=2099, month=1, day=1, tzinfo=datetime.timezone.utc)
+        
+        assets_df = assets_df.with_columns(pl.lit('USD').alias('currency'))
+
 
         equities = [
             Equity(
-                asset_name=asset["symbol"],
-                id=None,
+                asset_name=asset["ticker"],
+                id=None, 
                 start_date=asset_start_date,
                 end_date=asset_end_date,
                 auto_close_date=asset_end_date,
@@ -82,14 +81,14 @@ class LimexHubAssetDataSource(AssetDataSource):
         exchange_assets = [
             ExchangeAsset(
                 sid=None,
-                symbol=asset_df["symbol"],
-                exchange=exchanges_by_code.get(asset_df["mic"], exchanges_by_code[""]),
+                symbol=asset_df["ticker"],
+                exchange=exchanges_by_code.get(asset_df["mic"], ExchangeInfo(mic=asset_df["mic"], name=asset_df["mic"], canonical_name=asset_df["mic"], country_code="US")),
                 start_date=asset_start_date,
                 end_date=asset_end_date,
                 auto_close_date=asset_end_date,
                 first_traded=asset_start_date,
                 asset=asset,
-                external_id=asset_df["symbol"]
+                external_id=asset_df["id"]
             )
             for asset, asset_df in zip(equities, assets_df.iter_rows(named=True))
         ]
@@ -97,11 +96,36 @@ class LimexHubAssetDataSource(AssetDataSource):
         exchange_assets.extend(exchange_currencies)
         return exchange_assets
 
+    INSTRUMENTS_FILTERS = [
+        'XNGS@EQUITIES',
+        'XNYS@EQUITIES',
+        'ARCX@EQUITIES',
+        'ARCX@FUNDS',
+        'XNMS@FUNDS',
+        'BATS@FUNDS',
+        'MISX@EQUITIES',
+        'MISX@FUNDS',
+        'MISX@INDICES',
+        '_BNCC@CURRENCIES',
+        'RTSX@FUTURES',
+    ]
+
+    def _fetch_all_instruments(self) -> pl.DataFrame:
+        frames = []
+        for f in self.INSTRUMENTS_FILTERS:
+            self._logger.info("fetching instruments", filter=f)
+            raw = self._limex_client.instruments(f)
+            if raw is not None and len(raw) > 0:
+                frames.append(pl.from_dataframe(raw))
+        if not frames:
+            return pl.DataFrame()
+        return pl.concat(frames, how="diagonal").unique(subset=["id"])
+
     async def get_exchanges(self, **kwargs) -> list[ExchangeInfo]:
-        assets = self._limex_client.instruments()
+        assets_df = self._fetch_all_instruments()
         exchanges = [
             ExchangeInfo(mic=mic, name=mic, canonical_name=mic, country_code="US")
-            for mic in assets["mic"].unique().tolist() if mic is not None
+            for mic in assets_df["mic"].unique().to_list() if mic is not None
         ]
         return exchanges
 
