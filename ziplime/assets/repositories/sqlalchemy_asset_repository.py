@@ -284,17 +284,30 @@ class SqlAlchemyAssetRepository(AssetRepository):
         exchange_asset_currencies = []
         exchange_asset_equities = []
 
+        equities_by_new_ids = {}
+        currencies_by_new_ids = {}
+
+        exchange_asset_equities_mapping= []
+        exchange_asset_currencies_mapping= []
+
         for exchange_asset in exchange_assets:
-            if exchange_asset.asset.id is not None:
-                continue
+            asset_id = (exchange_asset.asset.isin, exchange_asset.asset.asset_name, exchange_asset.asset.id)
             if type(exchange_asset.asset) is Equity:
-                new_equities.append(exchange_asset.asset)
+                if exchange_asset.asset.id is None and asset_id not in equities_by_new_ids:
+                    new_equities.append(exchange_asset.asset)
+                    equities_by_new_ids[asset_id] = exchange_asset.asset
+                exchange_asset_equities_mapping.append(exchange_asset.asset)
                 exchange_asset_equities.append(exchange_asset)
             elif type(exchange_asset.asset) is Currency:
-                new_currencies.append(exchange_asset.asset)
+                if exchange_asset.asset.id is None and asset_id not in currencies_by_new_ids:
+                    new_currencies.append(exchange_asset.asset)
+                    currencies_by_new_ids[asset_id] = exchange_asset.asset
+                exchange_asset_currencies_mapping.append(exchange_asset.asset)
                 exchange_asset_currencies.append(exchange_asset)
         equities = await self.save_equities(equities=new_equities)
         currencies = await self.save_currencies(currencies=new_currencies)
+        equities_by_asset_ids = {(equity.isin, equity.asset_name): equity for equity in equities}
+        currencies_by_asset_ids = {(currency.isin, currency.asset_name): currency for currency in currencies}
 
         exchange_assets_equities_db = [
             ExchangeAssetModel(
@@ -303,13 +316,13 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 start_date=exchange_asset.start_date,
                 end_date=exchange_asset.end_date,
                 symbol=exchange_asset.symbol,
-                asset_id=asset_db.id,
+                asset_id=equities_by_asset_ids[(exchange_asset.asset.isin, exchange_asset.asset.asset_name)].id,
                 mic=exchange_asset.mic,
                 first_traded=exchange_asset.first_traded,
                 sid=None,
                 auto_close_date=exchange_asset.auto_close_date,
             )
-            for asset_db, exchange_asset in zip(equities, exchange_asset_equities)
+            for exchange_asset in exchange_asset_equities
         ]
         exchange_assets_currencies_db = [
             ExchangeAssetModel(
@@ -317,13 +330,13 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 start_date=exchange_asset.start_date,
                 end_date=exchange_asset.end_date,
                 symbol=exchange_asset.symbol,
-                asset_id=asset_db.id,
+                asset_id=currencies_by_asset_ids[(exchange_asset.asset.isin, exchange_asset.asset.asset_name)].id,
                 mic=exchange_asset.mic,
                 first_traded=exchange_asset.first_traded,
                 sid=None,
                 auto_close_date=exchange_asset.auto_close_date,
             )
-            for asset_db, exchange_asset in zip(currencies, exchange_asset_equities)
+            for exchange_asset in exchange_asset_currencies
         ]
         await self.add_all_and_commit(exchange_assets_equities_db)
         await self.add_all_and_commit(exchange_assets_currencies_db)
