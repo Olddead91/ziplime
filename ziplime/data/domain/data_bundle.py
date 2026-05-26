@@ -61,12 +61,12 @@ class DataBundle(DataSource):
         return self.data.select(pl.col(col) for col in columns).filter(pl.col("sid").is_in(sid))
 
     def get_data_by_date_and_sids(self, fields: frozenset[str],
-                         start_date: datetime.datetime,
-                         end_date: datetime.datetime,
-                         frequency: datetime.timedelta | Period,
-                         sids: frozenset[int],
-                         include_bounds: bool,
-                         ) -> pl.DataFrame:
+                                  start_date: datetime.datetime,
+                                  end_date: datetime.datetime,
+                                  frequency: datetime.timedelta | Period,
+                                  sids: frozenset[int],
+                                  include_bounds: bool,
+                                  ) -> pl.DataFrame:
 
         frequency_td = period_to_timedelta(frequency)
         sids_list = list(sids)
@@ -75,7 +75,8 @@ class DataBundle(DataSource):
         if end_date > self.end_date:
             raise ValueError(f"Requested end date {end_date} is greater than end date {self.end_date} of the bundle.")
         if start_date < self.start_date:
-            raise ValueError(f"Requested start date {start_date} is lower than start date {self.start_date} of the bundle.")
+            raise ValueError(
+                f"Requested start date {start_date} is lower than start date {self.start_date} of the bundle.")
 
         df = self.get_dataframe()
         if fields is None:
@@ -124,7 +125,8 @@ class DataBundle(DataSource):
                          ) -> pl.DataFrame:
         return self.get_data_by_date_and_sids(fields=fields, from_date=from_date,
                                               to_date=to_date, frequency=frequency,
-                                              sids=frozenset(asset.sid for asset in assets), include_bounds=include_bounds)
+                                              sids=frozenset(asset.sid for asset in assets),
+                                              include_bounds=include_bounds)
         cols = set(fields.union({"date", "sid"}))
         if include_bounds:
             asset_sid = [asset.sid for asset in assets][0]
@@ -172,12 +174,12 @@ class DataBundle(DataSource):
 
     # @lru_cache(maxsize=100)
     async def get_data_by_limit(self, fields: frozenset[str] | None,
-                          limit: int,
-                          end_date: datetime.datetime,
-                          frequency: datetime.timedelta | Period,
-                          assets: frozenset[Asset],
-                          include_end_date: bool,
-                          ) -> pl.DataFrame:
+                                limit: int,
+                                end_date: datetime.datetime,
+                                frequency: datetime.timedelta | Period,
+                                assets: frozenset[Asset],
+                                include_end_date: bool,
+                                ) -> pl.DataFrame:
         frequency_td = period_to_timedelta(frequency)
         asset_sid = [asset.sid for asset in assets][0]
 
@@ -203,10 +205,13 @@ class DataBundle(DataSource):
                 #     sid_index = self.asset_sid_date_index[(asset_sid, end_date)]
                 #     df_raw = self.get_dataframe()[sid_index].select(pl.col(col) for col in cols)
                 # else:
+                try:
                     sid_index = self.sid_indexes[asset_sid]
-                    df_raw = self.get_dataframe()[sid_index[0]:sid_index[1]].select(pl.col(col) for col in cols).filter(
-                        pl.col("date") <= end_date,
-                    ).tail(total_bar_count)
+                except KeyError:
+                    raise ValueError(f"No data for asset sid={asset_sid}")
+                df_raw = self.get_dataframe()[sid_index[0]:sid_index[1]].select(pl.col(col) for col in cols).filter(
+                    pl.col("date") <= end_date,
+                ).tail(total_bar_count)
             else:
                 df_raw = self.get_dataframe().select(pl.col(col) for col in cols).filter(
                     pl.col("date") <= end_date,

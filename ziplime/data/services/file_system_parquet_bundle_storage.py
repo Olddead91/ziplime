@@ -74,7 +74,14 @@ class FileSystemParquetBundleStorage(BundleStorage):
         filters = []
         pl_parquet = pl.scan_parquet(bundle_path)
         if symbols is not None:
-            filters.append(pl.col("symbol").is_in(symbols))
+            # TODO: update to require AssetSymbol instead of str
+            filter_symbols = []
+            for symbol in symbols:
+                if "@" in symbol:
+                    filter_symbols.append(symbol.split("@")[0])
+                else:
+                    filter_symbols.append(symbol)
+            filters.append(pl.col("symbol").is_in(filter_symbols))
         if start_date is not None:
             filters.append(pl.col("date") >= start_date)
         if end_date is not None:
