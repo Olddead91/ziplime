@@ -287,8 +287,8 @@ class SqlAlchemyAssetRepository(AssetRepository):
         equities_by_new_ids = {}
         currencies_by_new_ids = {}
 
-        exchange_asset_equities_mapping= []
-        exchange_asset_currencies_mapping= []
+        exchange_asset_equities_mapping = []
+        exchange_asset_currencies_mapping = []
 
         for exchange_asset in exchange_assets:
             asset_id = (exchange_asset.asset.isin, exchange_asset.asset.asset_name, exchange_asset.asset.id)
@@ -399,7 +399,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
         return res
 
     @aiocache.cached(cache=Cache.MEMORY)
-    async def get_exchange_asset_by_symbol(self, symbol: AssetSymbol, asset_type: AssetType,) -> ExchangeAsset | None:
+    async def get_exchange_asset_by_symbol(self, symbol: AssetSymbol, asset_type: AssetType, ) -> ExchangeAsset | None:
         match asset_type:
             case AssetType.EQUITY:
                 return await self.get_exchange_equity_by_symbol(symbol=symbol)
@@ -559,16 +559,19 @@ class SqlAlchemyAssetRepository(AssetRepository):
 
     async def get_exchange_equities_by_symbols(self, symbols: list[AssetSymbol]) -> list[ExchangeAsset]:
 
+        filter_mic = tuple_(ExchangeAssetModel.symbol, ExchangeAssetModel.mic).in_(
+            [(s.symbol, s.mic) for s in symbols if s.mic is not None]
+        )
+        filter_non_mic = ExchangeAssetModel.symbol.in_([s.symbol for s in symbols if s.mic is None])
         async with self.session_maker() as session:
             q = (
                 select(ExchangeAssetModel)
                 .where(
-                    tuple_(ExchangeAssetModel.symbol, ExchangeAssetModel.mic).in_(
-                        [(s.symbol, s.mic) for s in symbols]
-                    )
+                    filter_mic | filter_non_mic
                 )
                 .options(selectinload(ExchangeAssetModel.asset_router))
-            )
+            ).distinct(ExchangeAssetModel.mic, ExchangeAssetModel.symbol).order_by(
+                ExchangeAssetModel.mic, ExchangeAssetModel.symbol, "sid")
             results: list[ExchangeAssetModel] = list((await session.execute(q)).scalars())
 
             q_equities = select(EquityModel).where(

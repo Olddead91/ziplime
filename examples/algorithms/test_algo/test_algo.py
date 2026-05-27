@@ -28,7 +28,7 @@ async def initialize(context: TradingAlgorithm):
     context.assets = [
         # await context.symbol("NVDA"),
         await context.symbol("AAPL", mic="XNGS"),
-        await context.symbol("AMZN", mic="XNGS"),
+        await context.symbol("NVDA"),
         await context.symbol("NFLX@XNGS")
     ]
     context.q100us = await context.symbols_universe(name="Q100US", dt=None)

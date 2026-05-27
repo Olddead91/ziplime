@@ -49,7 +49,7 @@ async def _run_simulation():
                                                           frequency=datetime.timedelta(days=1),
                                                           start_date=start_date,
                                                           end_date=end_date,
-                                                          symbols=["META", "AAPL", "AMZN", "NFLX", "GOOGL"],
+                                                          symbols=["META", "AAPL", "AMZN", "NFLX", "GOOGL", "ETSY", "NVDA"],
                                                           start_auction_delta=start_auction_delta,
                                                           end_auction_delta=end_auction_delta,
                                                           aggregations=aggregations,

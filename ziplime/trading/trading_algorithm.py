@@ -653,10 +653,10 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         #     exchange_name = self.default_exchange.name
         if "@" in symbol:
             symbol, mic = symbol.split("@")
-        else:
-            symbol = symbol
-            if mic is None:
-                raise ValueError("You must supply MIC or use symbol in format ticker@MIC")
+        # else:
+        #     symbol = symbol
+        #     if mic is None:
+        #         raise ValueError("You must supply MIC or use symbol in format ticker@MIC")
 
         asset = await self.asset_service.get_exchange_asset_by_symbol(
             symbol=AssetSymbol(symbol=symbol, mic=mic),
