@@ -1,8 +1,6 @@
 import datetime
 from dataclasses import dataclass, field
-from typing import Self
-
-from ziplime.assets.entities.asset import Asset
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.domain.position import Position
 
 
@@ -19,6 +17,11 @@ class Portfolio:
     positions_exposure: float
     # exchange_portfolios: dict[str, Self]
 
-    positions: dict[Asset, Position] = field(default_factory=dict)
+    positions: dict[ExchangeAsset, Position] = field(default_factory=dict)
 
     start_date: datetime.datetime | None = None
+
+    def get_asset_positions(self, asset: ExchangeAsset) -> list[Position]:
+        positions = [position for exchange in self.positions.values() for trading_accounts in exchange.values()
+                              for position in trading_accounts.values() if position.asset.sid == asset.sid]
+        return positions

@@ -45,11 +45,12 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
 
     prices = df["close"].to_numpy()
 
-    current_amount = getattr(context.portfolio.positions.get(asset, 0), 'amount', 0)
+    asset_positions = context.portfolio.get_asset_positions(asset=asset)
+    asset_amount_in_all_trading_accounts = sum(position.amount for position in asset_positions)
 
     for asset in context.assets:
         order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())
-        order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
+        # order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
 
     # order_sell = await context.order_target_percent(asset=asset, target=0.0, style=MarketOrder())
     # if order_buy:
