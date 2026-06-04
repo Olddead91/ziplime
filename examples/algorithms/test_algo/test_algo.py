@@ -45,8 +45,10 @@ async def handle_data(context: TradingAlgorithm, data: BarData):
 
     prices = df["close"].to_numpy()
 
-    asset_positions = context.portfolio.get_asset_positions(asset=asset)
-    asset_amount_in_all_trading_accounts = sum(position.amount for position in asset_positions)
+    asset_positions = context.portfolio.get_asset_positions(asset=asset, exchange_name="LIME")
+    exchange_asset_positions = context.portfolio.get_exchange_asset_positions(asset=asset, exchange_name="LIME")
+    exchange_asset_positions_amount = context.portfolio.get_exchange_asset_positions_amount(asset=asset, exchange_name="LIME")
+    asset_positions_amount = context.portfolio.get_asset_positions_amount(asset=asset, exchange_name="LIME")
 
     for asset in context.assets:
         order_buy = await context.order_target_percent(asset=asset, target=1.0, style=MarketOrder())

@@ -1,5 +1,8 @@
 import datetime
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from itertools import chain
+
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.domain.position import Position
 
@@ -21,7 +24,58 @@ class Portfolio:
 
     start_date: datetime.datetime | None = None
 
-    def get_asset_positions(self, asset: ExchangeAsset) -> list[Position]:
-        positions = [position for exchange in self.positions.values() for trading_accounts in exchange.values()
-                              for position in trading_accounts.values() if position.asset.sid == asset.sid]
-        return positions
+    def get_exchange_asset_positions(self, asset: ExchangeAsset, exchange_name: str | None = None,
+                                     trading_account_id: str | None = None) -> list[Position]:
+        all_accounts = chain.from_iterable(exchange.values() for exchange in self.positions.values())
+        all_positions: Iterable[Position] = chain.from_iterable(account.values() for account in all_accounts)
+        filtered = list(
+            pos
+            for pos in all_positions
+            if pos.asset.sid == asset.sid
+               and (exchange_name is None or pos.exchange_name == exchange_name)
+               and (trading_account_id is None or pos.trading_account_id == trading_account_id)
+        )
+
+        return filtered
+
+    def get_asset_positions(self, asset: ExchangeAsset, exchange_name: str | None = None,
+                                     trading_account_id: str | None = None) -> list[Position]:
+        all_accounts = chain.from_iterable(exchange.values() for exchange in self.positions.values())
+        all_positions: Iterable[Position] = chain.from_iterable(account.values() for account in all_accounts)
+        filtered = list(
+            pos
+            for pos in all_positions
+            if pos.asset.asset.id == asset.asset.id
+            and (exchange_name is None or pos.exchange_name == exchange_name)
+            and (trading_account_id is None or pos.trading_account_id == trading_account_id)
+        )
+
+        return filtered
+
+    def get_exchange_asset_positions_amount(self, asset: ExchangeAsset, exchange_name: str | None = None,
+                                     trading_account_id: str | None = None) -> int:
+        all_accounts = chain.from_iterable(exchange.values() for exchange in self.positions.values())
+        all_positions: Iterable[Position] = chain.from_iterable(account.values() for account in all_accounts)
+        filtered = sum(
+            pos.amount
+            for pos in all_positions
+            if pos.asset.sid == asset.sid
+            and (exchange_name is None or pos.exchange_name == exchange_name)
+            and (trading_account_id is None or pos.trading_account_id == trading_account_id)
+        )
+
+        return filtered
+
+    def get_asset_positions_amount(self, asset: ExchangeAsset, exchange_name: str | None = None,
+                                     trading_account_id: str | None = None) -> int:
+        all_accounts = chain.from_iterable(exchange.values() for exchange in self.positions.values())
+        all_positions: Iterable[Position] = chain.from_iterable(account.values() for account in all_accounts)
+        filtered = sum(
+            pos.amount
+            for pos in all_positions
+            if pos.asset.asset.id == asset.asset.id
+            and (exchange_name is None or pos.exchange_name == exchange_name)
+            and (trading_account_id is None or pos.trading_account_id == trading_account_id)
+        )
+
+        return filtered
