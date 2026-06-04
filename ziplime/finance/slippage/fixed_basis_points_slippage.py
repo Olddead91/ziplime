@@ -95,7 +95,7 @@ class FixedBasisPointsSlippage(SlippageModel):
         slippage = self.percentage * math.copysign(1, 1)  # +1 for buy, -1 for sell if needed
         price_with_slippage = price * (1 + slippage)
 
-        target_cash = available_cash * percentage
+        target_cash = available_cash #* percentage
         max_quantity = target_cash / price_with_slippage
         shares_to_fill = min(abs(max_quantity), max_volume - self.volume_for_bar)
         # print(f"estimated_price_for_target_percentage={price_with_slippage}, shares_to_fill={shares_to_fill},"

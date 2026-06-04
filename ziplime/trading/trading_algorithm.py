@@ -1342,12 +1342,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     async def _calculate_order_percent_amount(self, asset: ExchangeAsset, percent: float, exchange: Exchange,
                                               reserved_percentage_for_fees: float = 0.00):
-        # value = self.portfolio.portfolio_value * percent
-        # return self._calculate_order_value_amount(asset=asset, value=value, exchange_name=exchange_name)
-
-        # value = min(self.portfolio.portfolio_value - self.portfolio.portfolio_value * reserved_percentage_for_fees,
-        #             self.portfolio.portfolio_value * percent)
-        # print(f"Value for order: old={self.portfolio.portfolio_value * percent}, new={value}")
         value = self.portfolio.portfolio_value * percent
 
         requested_quantity = await self._calculate_order_value_amount(asset=asset, value=value,
@@ -1361,7 +1355,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         estimated_price, estimated_quantity = await slippage.order_target_percentage_maximum_quantity(asset=asset,
                                                                                                       exchange=exchange,
                                                                                                       percentage=percent,
-                                                                                                      available_cash=value,
+                                                                                                      available_cash=value - projected_commission,
                                                                                                       dt=self.simulation_dt)
         # print(
         #     f"[{self.simulation_dt}] Calculating PRICE FOR handle_data ({estimated_quantity} * {estimated_price})={estimated_quantity * estimated_price}, price_with_slippage={estimated_price} cash_before={self.portfolio.cash}")
@@ -1589,7 +1583,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             exchange=exchange,
             trading_account_id=exchange.account_id
         )
-
         return await self.order(
             asset=asset,
             amount=amount,

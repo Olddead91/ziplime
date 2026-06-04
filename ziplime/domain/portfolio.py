@@ -85,7 +85,7 @@ class Portfolio:
         all_accounts = chain.from_iterable(exchange.values() for exchange in self.positions.values())
         all_positions: Iterable[Position] = chain.from_iterable(account.values() for account in all_accounts)
         filtered = sum(
-            pos.amount * pos.cost_basis
+            pos.amount * pos.last_sale_price
             for pos in all_positions
             if pos.asset.sid == asset.sid
             and (exchange_name is None or pos.exchange_name == exchange_name)
@@ -99,7 +99,7 @@ class Portfolio:
         all_accounts = chain.from_iterable(exchange.values() for exchange in self.positions.values())
         all_positions: Iterable[Position] = chain.from_iterable(account.values() for account in all_accounts)
         filtered = sum(
-            pos.amount * pos.cost_basis
+            pos.amount * pos.last_sale_price
             for pos in all_positions
             if pos.asset.asset.id == asset.asset.id
             and (exchange_name is None or pos.exchange_name == exchange_name)
