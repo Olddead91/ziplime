@@ -1,6 +1,6 @@
 import datetime
 from collections import deque
-from functools import partial, lru_cache
+from functools import partial
 from operator import attrgetter
 from pathlib import Path
 from typing import Any, Self
@@ -101,15 +101,12 @@ class SqlAlchemyAssetRepository(AssetRepository):
 
         # Populated on first call to `lifetimes`.
         self._asset_lifetimes = {}
+        self._cached_assets: dict[int, Asset] = {}
         self.migrate()
+        self.engine = create_async_engine(self.db_url, pool_pre_ping=True, pool_size=20)
+        self.session_maker = async_sessionmaker(autocommit=False, autoflush=True, bind=self.engine, class_=AsyncSession,
+                                                expire_on_commit=False)
 
-    @property
-    @lru_cache
-    def session_maker(self) -> async_sessionmaker[AsyncSession]:
-        engine = create_async_engine(self.db_url, pool_pre_ping=True, pool_size=20)
-        session_maker = async_sessionmaker(autocommit=False, autoflush=True, bind=engine, class_=AsyncSession,
-                                           expire_on_commit=False)
-        return session_maker
 
     async def add_all_and_commit(self, models: list[BaseModel]):
         async with self.session_maker() as session:
@@ -198,18 +195,32 @@ class SqlAlchemyAssetRepository(AssetRepository):
             await session.commit()
 
     @aiocache.cached(cache=Cache.MEMORY)
-    async def get_exchange_by_mic(self, mic: str) -> ExchangeInfoModel | None:
+    async def get_exchange_by_mic(self, mic: str) -> ExchangeInfo | None:
         async with self.session_maker() as session:
             q = select(ExchangeInfoModel).where(ExchangeInfoModel.mic == mic)
             exchange = (await session.execute(q)).scalar_one_or_none()
-            return exchange
+        if exchange is None:
+            return None
+        exchange_info = ExchangeInfo(
+            mic=exchange.mic,
+            country_code=exchange.country_code,
+            canonical_name=exchange.canonical_name,
+            name=exchange.name
+        )
+        return exchange_info
 
     @aiocache.cached(cache=Cache.MEMORY)
-    async def get_exchanges_by_country_codes(self, country_codes: frozenset[str]) -> list[ExchangeInfoModel]:
+    async def get_exchanges_by_country_codes(self, country_codes: frozenset[str]) -> list[ExchangeInfo]:
         async with self.session_maker() as session:
             q = select(ExchangeInfoModel).where(ExchangeInfoModel.country_code.in_(country_codes))
             exchanges = list((await session.execute(q)).scalars())
-            return exchanges
+
+        return [ExchangeInfo(
+            mic=exchange.mic,
+            country_code=exchange.country_code,
+            canonical_name=exchange.canonical_name,
+            name=exchange.name
+        ) for exchange in exchanges]
 
     async def save_equities(self, equities: list[Equity]) -> list[EquityModel]:
         assets_db = []
@@ -344,8 +355,11 @@ class SqlAlchemyAssetRepository(AssetRepository):
     # async def save_equity_symbol_mappings(self, equity_symbol_mappings: list[EquitySymbolMappingModel]) -> None:
     #     await self.add_all_and_commit(equity_symbol_mappings)
 
-    @cached(cache=Cache.MEMORY)
+    # @cached(cache=Cache.MEMORY)
     async def get_all_assets(self) -> dict[int, Asset]:
+        if self._cached_assets:
+            return self._cached_assets
+
         async with self.session_maker() as session:
             q_equities = select(EquityModel).options(selectinload(EquityModel.asset_router))
             equities = list((await session.execute(q_equities)).scalars().all())
@@ -358,13 +372,35 @@ class SqlAlchemyAssetRepository(AssetRepository):
 
             q_commodities = select(CommodityModel).options(selectinload(CommodityModel.asset_router))
             commodities = list((await session.execute(q_commodities)).scalars().all())
-
-            res = {
-                **{asset.id: asset for asset in equities},
-                **{asset.id: asset for asset in futures_contracts},
-                **{asset.id: asset for asset in currencies},
-                **{asset.id: asset for asset in commodities},
-            }
+        res = {}
+        for asset in equities:
+            res[asset.id] = Equity(
+                id=asset.id,
+                asset_name=asset.asset_name,
+                start_date=asset.start_date,
+                first_traded=asset.first_traded,
+                end_date=asset.end_date,
+                auto_close_date=asset.auto_close_date,
+                isin=asset.isin
+            )
+        for asset in futures_contracts:
+            # Map to your pure FuturesContract domain entity...
+            pass
+        for asset in currencies:
+            # Map to your pure Currency domain entity...
+            res[asset.id] = Currency(
+                id=asset.id,
+                asset_name=asset.asset_name,
+                start_date=asset.start_date,
+                first_traded=asset.first_traded,
+                end_date=asset.end_date,
+                auto_close_date=asset.auto_close_date,
+                isin=asset.isin
+            )
+        for asset in commodities:
+            # Map to your pure Commodity domain entity...
+            pass
+        self._cached_assets = res
         return res
 
     @cached(cache=Cache.MEMORY)
@@ -417,15 +453,7 @@ class SqlAlchemyAssetRepository(AssetRepository):
     async def get_assets_by_ids(self, ids: list[int]) -> list[Asset]:
         assets_by_id = await self.get_all_assets()
         assets = [assets_by_id.get(id, None) for id in ids]
-        return [Equity(
-            id=asset.id,
-            asset_name=asset.asset_name,
-            start_date=asset.start_date,
-            first_traded=asset.first_traded,
-            end_date=asset.end_date,
-            auto_close_date=asset.auto_close_date,
-            isin=asset.isin
-        ) for asset in assets]
+        return assets
 
     async def get_symbols_universe(self, name: str, dt: datetime.date) -> SymbolsUniverse | None:
         universes_by_symbol = await self.get_all_universes()
@@ -579,25 +607,25 @@ class SqlAlchemyAssetRepository(AssetRepository):
                 selectinload(EquityModel.asset_router))
             assets: list[EquityModel] = list((await session.execute(q_equities)).scalars())
             assets_by_id = {asset.id: asset for asset in assets}
-            return [ExchangeAsset(
-                sid=asset.sid,
-                start_date=asset.start_date,
-                first_traded=asset.first_traded,
-                end_date=asset.end_date,
-                auto_close_date=asset.auto_close_date,
-                symbol=asset.symbol,
-                exchange=await self.get_exchange_by_mic(mic=asset.mic),
-                asset=Equity(
-                    first_traded=assets_by_id[asset.asset_id].first_traded,
-                    auto_close_date=assets_by_id[asset.asset_id].auto_close_date,
-                    end_date=assets_by_id[asset.asset_id].end_date,
-                    start_date=assets_by_id[asset.asset_id].start_date,
-                    isin=assets_by_id[asset.asset_id].isin,
-                    asset_name=assets_by_id[asset.asset_id].asset_name,
-                    id=assets_by_id[asset.asset_id].id,
-                ),
-                external_id=asset.external_id,
-            ) for asset in results]
+        return [ExchangeAsset(
+            sid=asset.sid,
+            start_date=asset.start_date,
+            first_traded=asset.first_traded,
+            end_date=asset.end_date,
+            auto_close_date=asset.auto_close_date,
+            symbol=asset.symbol,
+            exchange=await self.get_exchange_by_mic(mic=asset.mic),
+            asset=Equity(
+                first_traded=assets_by_id[asset.asset_id].first_traded,
+                auto_close_date=assets_by_id[asset.asset_id].auto_close_date,
+                end_date=assets_by_id[asset.asset_id].end_date,
+                start_date=assets_by_id[asset.asset_id].start_date,
+                isin=assets_by_id[asset.asset_id].isin,
+                asset_name=assets_by_id[asset.asset_id].asset_name,
+                id=assets_by_id[asset.asset_id].id,
+            ),
+            external_id=asset.external_id,
+        ) for asset in results]
 
     async def get_equities_by_isins(self, isins: list[str]) -> list[Equity]:
         async with self.session_maker() as session:
