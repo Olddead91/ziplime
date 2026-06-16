@@ -19,7 +19,6 @@ import uuid
 from sys import float_info
 from numpy import isfinite
 import ziplime.utils.math_utils as zp_math
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.errors import BadOrderParameters
 from ziplime.trading.entities.orders.market_order_request import MarketOrderRequest

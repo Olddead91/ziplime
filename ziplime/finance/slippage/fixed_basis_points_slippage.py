@@ -1,7 +1,6 @@
 import datetime
 import math
 
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.errors import LiquidityExceeded
 from ziplime.exchanges.exchange import Exchange

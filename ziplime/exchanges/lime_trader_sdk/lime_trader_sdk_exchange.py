@@ -1,6 +1,5 @@
 import asyncio
 import datetime
-import logging
 import polars as pl
 from functools import partial
 

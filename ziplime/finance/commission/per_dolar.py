@@ -1,3 +1,4 @@
+from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.finance.commission.equity_commission_model import EquityCommissionModel
 
 
@@ -30,3 +31,6 @@ class PerDollar(EquityCommissionModel):
         """
         cost_per_share = transaction.price * self.cost_per_dollar
         return abs(transaction.amount) * cost_per_share
+
+    def calculate_for_asset(self, asset: ExchangeAsset, quantity: int, transaction_amount: float) -> float:
+        return transaction_amount * self.cost_per_dollar

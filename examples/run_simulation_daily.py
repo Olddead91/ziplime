@@ -16,7 +16,8 @@ import pytz
 
 from ziplime.core.ingest_data import get_asset_service
 from ziplime.core.run_simulation import run_simulation
-from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE
+from ziplime.finance.commission import PerShare, DEFAULT_PER_SHARE_COST, DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE, \
+    PerDollar
 from ziplime.finance.slippage.fixed_basis_points_slippage import FixedBasisPointsSlippage
 
 logger = structlog.get_logger(__name__)
@@ -59,10 +60,13 @@ async def _run_simulation():
     # custom_data_sources.append(
     #     await bundle_service.load_bundle(bundle_name="limex_us_fundamental_data", bundle_version=None))
 
-    equity_commission = PerShare(
-        cost=DEFAULT_PER_SHARE_COST,
-        min_trade_cost=DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE,
-
+    # equity_commission = PerShare(
+    #     cost=DEFAULT_PER_SHARE_COST,
+    #     min_trade_cost=DEFAULT_MINIMUM_COST_PER_EQUITY_TRADE,
+    #
+    # )
+    equity_commission = PerDollar(
+        cost=0.001,
     )
     equity_slippage = FixedBasisPointsSlippage()
 
@@ -95,7 +99,6 @@ async def _run_simulation():
     print(result.perf.head(n=10).to_markdown())
 
     cash_flow = {"date": [], "cash_change": [], "cash_left": []}
-
 
     # Get cash from algo
     # start_cash = sum(exchange.get_start_cash_balance() for exchange in result.trading_algorithm.exchanges.values())

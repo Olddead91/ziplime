@@ -1,6 +1,5 @@
 from collections import defaultdict
 
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.finance.commission import DEFAULT_PER_CONTRACT_COST, calculate_per_unit_commission
 from ziplime.finance.commission.future_commission_model import FutureCommissionModel
@@ -99,8 +98,7 @@ class PerContract(FutureCommissionModel):
             initial_commission=exchange_fee,
             min_trade_cost=self.min_trade_cost,
         )
-
-    def calculate_for_asset(self, asset: FuturesContract, quantity: int) -> float:
+    def calculate_for_asset(self, asset: FuturesContract, quantity: int, transaction_amount: float) -> float:
         root_symbol = asset.root_symbol
         cost_per_contract = self._cost_per_contract[root_symbol]
         exchange_fee = self._exchange_fee[root_symbol]

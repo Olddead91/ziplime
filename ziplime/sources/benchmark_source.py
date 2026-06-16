@@ -3,7 +3,6 @@ import datetime
 import pandas as pd
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.services.asset_service import AssetService
 from ziplime.errors import (

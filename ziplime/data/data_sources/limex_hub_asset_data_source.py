@@ -8,7 +8,6 @@ import structlog
 
 import polars as pl
 
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.exchange_asset import ExchangeAsset

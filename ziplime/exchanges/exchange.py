@@ -4,7 +4,6 @@ from abc import abstractmethod, ABC
 
 from exchange_calendars import ExchangeCalendar
 
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_source import DataSource

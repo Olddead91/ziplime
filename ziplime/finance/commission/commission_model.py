@@ -1,6 +1,5 @@
 from abc import abstractmethod
 
-from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.equity import Equity
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 
@@ -50,5 +49,5 @@ class CommissionModel(metaclass=FinancialModelMeta):
         raise NotImplementedError("calculate")
 
     @abstractmethod
-    def calculate_for_asset(self, asset: ExchangeAsset, quantity: int):
+    def calculate_for_asset(self, asset: ExchangeAsset, quantity: int, transaction_amount: float) -> float:
         raise NotImplementedError("calculate_for_asset")

@@ -14,7 +14,6 @@ from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.constants.period import Period
 from ziplime.data.domain.data_bundle import DataBundle
 from ziplime.data.services.data_source import DataSource
-from ziplime.exchanges.exchange import Exchange
 
 
 @contextmanager

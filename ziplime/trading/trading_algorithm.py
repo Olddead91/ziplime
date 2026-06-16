@@ -22,11 +22,10 @@ from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.asset_symbol import AssetSymbol
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.services.asset_service import AssetService
-from ziplime.constants.logging_event import LoggingEvent, LoggingEvent
+from ziplime.constants.logging_event import LoggingEvent
 from ziplime.core.algorithm_file import AlgorithmFile
 from ziplime.data.services.data_source import DataSource
 from ziplime.domain.bar_data import BarData
-from ziplime.domain.portfolio import Portfolio
 from ziplime.exchanges.repositories.exchange_repository import ExchangeRepository
 from ziplime.finance.blotter.blotter import Blotter
 from ziplime.finance.controls.long_only import LongOnly
@@ -1348,7 +1347,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                                                                       exchange=exchange)
         commission = exchange.get_commission_model(asset=asset)
         slippage = exchange.get_slippage_model(asset=asset)
-        projected_commission = commission.calculate_for_asset(asset=asset, quantity=requested_quantity)
+        projected_commission = commission.calculate_for_asset(asset=asset, quantity=requested_quantity, transaction_amount=value)
         new_quantity = await self._calculate_order_value_amount(asset=asset, value=value - projected_commission,
                                                                 exchange=exchange)
         # return new_quantity

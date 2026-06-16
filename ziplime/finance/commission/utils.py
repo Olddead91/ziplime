@@ -1,4 +1,3 @@
-from ziplime.assets.entities.asset import Asset
 
 
 def calculate_per_unit_commission(

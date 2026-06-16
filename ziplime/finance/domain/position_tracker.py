@@ -13,7 +13,6 @@ from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.models.dividend import Dividend
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.exchanges.exchange import Exchange
-from ziplime.exchanges.repositories.exchange_repository import ExchangeRepository
 from ziplime.finance.domain.position import Position
 from ziplime.finance.domain.transaction import Transaction
 from ziplime.finance.finance_ext import (

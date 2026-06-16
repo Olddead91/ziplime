@@ -3,7 +3,6 @@ from typing import Callable
 from exchange_calendars import ExchangeCalendar
 
 from ziplime.assets.domain.asset_type import AssetType
-# from ziplime.assets.entities.asset import Asset
 from ziplime.assets.entities.exchange_asset import ExchangeAsset
 from ziplime.assets.entities.futures_contract import FuturesContract
 from ziplime.finance.asset_restrictions import Restrictions

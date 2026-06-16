@@ -1,7 +1,6 @@
 import re
 from collections import namedtuple
 
-import logging
 import pandas as pd
 import sqlalchemy as sa
 import structlog
