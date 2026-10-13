@@ -92,6 +92,7 @@ def factorize_strings_known_categories(values: np.ndarray,
     Any entries not in the specified categories will be given the code for
     `missing_value`.
     """
+    categories = list(categories)
     if missing_value not in categories:
         categories.insert(0, missing_value)
 
@@ -165,13 +166,14 @@ def factorize_strings_impl(values: np.ndarray,
     )
 
     if sort:
-        # This is all adapted from pandas.core.algorithms.factorize.
         ncategories = len(categories_array)
         sorter = np.empty(ncategories, dtype=np.int64)
 
-        # Don't include missing_value in the argsort, because None is
-        # unorderable with bytes/str in py3. Always just sort it to 0.
-        sorter[1:] = categories_array[1:].argsort() + 1
+        if categories_array[0] is None or any(c is None for c in categories_array[1:]):
+            sort_keys = [_NoneFirstSortKey(c) for c in categories_array[1:]]
+            sorter[1:] = np.argsort(sort_keys) + 1
+        else:
+            sorter[1:] = categories_array[1:].argsort() + 1
         sorter[0] = 0
 
         reverse_indexer = np.empty(ncategories, dtype=codes.dtype)

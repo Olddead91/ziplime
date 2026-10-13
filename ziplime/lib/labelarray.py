@@ -147,8 +147,8 @@ class LabelArray(ndarray):
         # Numpy's fixed-width string types aren't very efficient. Working with
         # object arrays is faster than bytes or unicode arrays in almost all
         # cases.
-        if not is_object(values):
-            values = values.astype(object)
+        if not isinstance(values, np.ndarray) or not is_object(values):
+            values = np.asarray(values, dtype=object)
 
         if values.flags.f_contiguous:
             ravel_order = "F"
@@ -490,6 +490,7 @@ class LabelArray(ndarray):
         return super(LabelArray, self).view(**kwargs)
 
     def astype(self, dtype, order="K", casting="unsafe", subok=True, copy=True):
+        dtype = np.dtype(dtype)
         if dtype == self.dtype:
             if not subok:
                 array = self.view(type=np.ndarray)

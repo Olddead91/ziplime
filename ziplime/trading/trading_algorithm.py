@@ -114,7 +114,6 @@ from ziplime.vectorized.signals import (
     PricePanel, SignalPanel, as_of_panel, normalise_signals, verify_causality,
 )
 
-
 # For creating and storing pipeline instances
 AttachedPipeline = namedtuple("AttachedPipeline", "pipe chunks eager")
 
@@ -2248,7 +2247,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
 
     def _calculate_order_target_amount(self, exchange: Exchange, trading_account_id: str, asset: ExchangeAsset,
                                        target: int):
-        current_position = self.portfolio.positions.get((exchange.name,trading_account_id, asset), None)
+        current_position = self.portfolio.positions.get((exchange.name, trading_account_id, asset), None)
         if current_position is not None:
             # current_position = self.portfolio.positions[asset].amount
             target -= current_position.amount
@@ -2994,9 +2993,10 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         # assets_we_care_about = (
         #         self._ledger.position_tracker.positions.keys() | self.blotter.get_all_assets_in_open_orders()
         # )
-        assets_we_care_about = set([pos.asset.asset for pos in self._ledger.position_tracker.get_position_list()] + [exchange_asset.asset for
-                                                                                                exchange_asset in
-                                                                                                self.blotter.get_all_assets_in_open_orders()])
+        assets_we_care_about = set(
+            [pos.asset.asset for pos in self._ledger.position_tracker.get_position_list()] + [exchange_asset.asset for
+                                                                                              exchange_asset in
+                                                                                              self.blotter.get_all_assets_in_open_orders()])
 
         if assets_we_care_about:
             splits = await asset_service.get_splits(assets_we_care_about, midnight_dt)

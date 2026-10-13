@@ -60,8 +60,12 @@ async def _process_data(data: pl.DataFrame,
                 (type(frequency) is datetime.timedelta and frequency >= datetime.timedelta(days=1)) or
                 (type(frequency) is str and frequency in ["1d", "1w", "1mo", "1q", "1y"])
         ):
-            last_row = required_sessions.tail(1).with_columns(
-                pl.col("date").dt.offset_by(frequency) - pl.duration(days=1))
+            offset_expr = (
+                pl.col("date") + frequency - pl.duration(days=1)
+                if isinstance(frequency, datetime.timedelta)
+                else pl.col("date").dt.offset_by(frequency) - pl.duration(days=1)
+            )
+            last_row = required_sessions.tail(1).with_columns(offset_expr)
             required_sessions = required_sessions.with_columns(
                 pl.col("date") - pl.duration(days=1)
             )[1:]
