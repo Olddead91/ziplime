@@ -1,5 +1,50 @@
 # Release Notes
 
+### Version 2.11.0
+
+Each listing now keeps its own venue's trading hours, so one backtest can hold instruments from
+markets that keep different hours. Extensions can now add venues, calendars and data-source
+addresses without patching ziplime. `zipfinam` uses this for the Moscow Exchange: MISX, the FORTS
+calendar and MOEX AlgoPack.
+
+#### Upgrading from 2.10.3
+
+- **Single-market backtests are unchanged.** A run whose listings all trade on the simulation's
+  own calendar gives the same results as on 2.10.3.
+- **Moscow venues need zipfinam.** ziplime ships no calendar for MISX or RTSX. Install `zipfinam`
+  (1.26.10.1 or later) to have Moscow listings judged by their own hours; without it they are
+  judged by the simulation's calendar, as before.
+
+#### Backtest results that change
+
+- **A listing is judged by its own venue's hours.** Before, every listing was judged by the
+  simulation's calendar. On an hourly run clocked on Moscow, an American ETF counted as tradeable
+  at 10:01 Moscow, which is 03:01 in New York. The order then failed with
+  `CannotOrderDelistedAsset: no last price`. Now `data.can_trade` asks the listing's venue. On a
+  daily run it asks whether the venue traded that day; on an intraday run it asks about the minute.
+- **`context.rebalance` leaves a leg alone while its market is shut.** That leg is neither ordered
+  to its target nor closed. Before, the run failed on the first bar where one leg's market was
+  closed.
+
+#### New
+
+- `ziplime.utils.venue_calendars`:
+  - `calendar_for_mic` gives the calendar a venue keeps, for the US equity venues, CME, NYMEX,
+    ICE and the crypto venues;
+  - `clock_calendar_name` gives one calendar wide enough for every venue in a run: `24/5` when
+    their hours differ, `24/7` when one never closes;
+  - `ZIPLIME_VENUE_CALENDARS` overrides the table, as `MIC=CALENDAR,...`.
+- **Extension point for venues.** `register_venue_calendars({MIC: calendar})`, or the
+  `ziplime.venue_calendars` entry point group, which is loaded on first lookup.
+- **Extension point for data-source addresses.** `register_address_scheme(scheme, mount)`, or the
+  `ziplime.address_schemes` entry point group. A strategy then reads
+  `data.history(..., data_source="scheme://...")` with no registration of its own. `hf://` stays
+  built in.
+- `ExchangeAsset.trading_calendar`: the listing's own venue calendar, or `None` for a venue not
+  in the table. Callers then fall back to the simulation's calendar.
+- Ordering a listing whose market is closed now says so and names both calendars. Before, the
+  error blamed delisting.
+
 ### Version 2.10.3
 
 The first release since 1.19.16. Ziplime now trades futures, bonds and options alongside equities in
