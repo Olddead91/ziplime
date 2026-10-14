@@ -2821,27 +2821,6 @@ mkdocs-autorefs = ">=1.4"
 mkdocstrings = ">=0.30"
 
 [[package]]
-name = "moexalgo"
-version = "2.5.12"
-description = "Python lib for MOEX AlgoPack data"
-optional = true
-python-versions = ">=3.12"
-groups = ["main"]
-markers = "extra == \"algopack\" or extra == \"all\""
-files = [
-    {file = "moexalgo-2.5.12-py3-none-any.whl", hash = "sha256:afceac007e9ca61735f08ef587f4b5ec2e163b1aef5fe19d05b9bc7491688f42"},
-    {file = "moexalgo-2.5.12.tar.gz", hash = "sha256:bb97871e504459108d5c151d055ad8ebf676754df994432f09ae850eb5575bc7"},
-]
-
-[package.dependencies]
-httpx = "*"
-orjson = ">=3.11.3"
-
-[package.extras]
-dataframe = ["pandas"]
-issplus = ["stomp-py", "websockets"]
-
-[[package]]
 name = "multitasking"
 version = "0.0.12"
 description = "Non-blocking Python methods using decorators"
@@ -5680,8 +5659,7 @@ nospam = ["requests_cache (>=1.0)", "requests_ratelimiter (>=0.3.1)"]
 repair = ["scipy (>=1.6.3)"]
 
 [extras]
-algopack = ["moexalgo"]
-all = ["huggingface-hub", "mcp", "moexalgo", "numba", "pyyaml", "vollib"]
+all = ["huggingface-hub", "mcp", "numba", "pyyaml", "vollib"]
 huggingface = ["huggingface-hub", "pyyaml"]
 mcp = ["mcp"]
 numba = ["numba"]
@@ -5690,4 +5668,4 @@ options = ["vollib"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "5f93da13ef5a46f29a1720ce42f3a0e044040bbb92a93b32652aab817b6bf97b"
+content-hash = "0e0b9191a4143771ac767fa794378ef3ece43eb8481191058f930f245b35602b"

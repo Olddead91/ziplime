@@ -1342,29 +1342,33 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         """Mount a data source a strategy named but never registered.
 
         Today that means a dataset address: ``hf://owner/name/config`` for a published Hugging
-        Face dataset, or ``algopack://market/dataset`` for a MOEX AlgoPack table. Both are
-        resolved here rather than in :class:`~ziplime.domain.bar_data.BarData` because a mount
-        needs the asset database, to turn the dataset's tickers into sids, and the simulation
-        window, to avoid fetching years the run cannot reach -- and this object holds both.
+        Face dataset, or ``scheme://...`` for a scheme an extension registered -- zipfinam's
+        ``algopack://market/dataset`` for a MOEX AlgoPack table, for example (see
+        :mod:`ziplime.data.data_sources.address_schemes`). They are resolved here rather than in
+        :class:`~ziplime.domain.bar_data.BarData` because a mount needs the asset database, to
+        turn the dataset's tickers into sids, and the simulation window, to avoid fetching years
+        the run cannot reach -- and this object holds both.
         """
-        from ziplime.data.data_sources.algopack.algopack_data_source import (
-            AlgoPackDataSource, is_address as is_algopack_address,
-        )
+        from ziplime.data.data_sources import address_schemes
         from ziplime.data.data_sources.huggingface.huggingface_data_source import (
             HuggingFaceDataSource, is_address,
         )
-        if is_algopack_address(name):
-            # No network and no asset lookup: AlgoPack is read per instrument, so a mount knows
-            # nothing until a strategy says which instruments it is asking about.
-            return AlgoPackDataSource.mount(
-                name, start_date=self.clock.start_session, end_date=self.clock.end_session,
-                trading_calendar=self.clock.trading_calendar)
         if not is_address(name):
-            raise KeyError(
-                f"No data source named {name!r}. Register it with "
-                f"run_simulation(custom_data_sources=[...]), or name a dataset -- a Hugging Face "
-                f"one as hf://owner/name/config, a MOEX AlgoPack table as "
-                f"algopack://market/dataset.")
+            mount = address_schemes.mount_for(name)
+            if mount is None:
+                extensions = "".join(f", {scheme}://"
+                                     for scheme in address_schemes.registered_schemes())
+                raise KeyError(
+                    f"No data source named {name!r}. Register it with "
+                    f"run_simulation(custom_data_sources=[...]), or name a dataset by address: "
+                    f"hf://owner/name/config{extensions}. Other schemes come with extensions -- "
+                    f"algopack:// with zipfinam.")
+            source = mount(name, asset_service=self.asset_service,
+                           start_date=self.clock.start_session, end_date=self.clock.end_session,
+                           trading_calendar=self.clock.trading_calendar)
+            if inspect.isawaitable(source):
+                source = await source
+            return source
         return await HuggingFaceDataSource.mount(
             name, asset_service=self.asset_service,
             start_date=self.clock.start_session, end_date=self.clock.end_session,
@@ -1412,48 +1416,6 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             start_date=start_date or self.clock.start_session,
             end_date=end_date or self.clock.end_session,
             fields=fields, name=name,
-            trading_calendar=self.clock.trading_calendar)
-        self.current_data.data_sources[source.name] = source
-        return source
-
-    @api_method
-    async def algopack_dataset(self, dataset: str, market: str = "eq",
-                               granularity: str = "1d",
-                               fields: list[str] | None = None,
-                               start_date: datetime.date | None = None,
-                               end_date: datetime.date | None = None,
-                               name: str | None = None):
-        """Mount a MOEX AlgoPack table.
-
-        The explicit form of ``data.history(data_source="algopack://eq/tradestats")``. Use it when
-        the defaults are not what you want -- above all to mount the **five-minute buckets**
-        rather than the session aggregate::
-
-            context.flow = await context.algopack_dataset("tradestats", granularity="5min")
-
-        Then read it like any other source::
-
-            df = await data.history(assets=[sber], bar_count=12, data_source=context.flow)
-
-        Args:
-            dataset: ``tradestats``, ``orderstats``, ``obstats``, ``hi2``, ``alerts`` or
-                ``futoi``.
-            market: ``eq`` (equities), ``fo`` (futures) or ``fx``.
-            granularity: ``1d`` for one row per Moscow session, aggregated with a rule per
-                column, or ``5min`` for the buckets exactly as the exchange publishes them.
-            fields: Columns to keep besides ``date`` and ``sid``. All of them by default.
-            start_date, end_date: Window to fetch. Defaults to the simulation's own, which is
-                what keeps a long backtest from asking for years it cannot reach.
-            name: What to call the source. Defaults to its address.
-
-        Returns:
-            The mounted source. Nothing is fetched until a read names the instruments to fetch.
-        """
-        from ziplime.data.data_sources.algopack.algopack_data_source import AlgoPackDataSource
-        source = AlgoPackDataSource.mount(
-            f"algopack://{market}/{dataset}", granularity=granularity, fields=fields, name=name,
-            start_date=start_date or self.clock.start_session,
-            end_date=end_date or self.clock.end_session,
             trading_calendar=self.clock.trading_calendar)
         self.current_data.data_sources[source.name] = source
         return source

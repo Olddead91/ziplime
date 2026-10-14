@@ -15,61 +15,24 @@ So a listing answers for its own venue here, and the simulation is clocked on so
 enough to visit every minute any of its venues trades. The two are different questions and this
 module answers both: :func:`calendar_for_mic` for the listing, :func:`clock_calendar_name` for
 the run.
+
+The table here covers the venues `exchange_calendars` already describes. A market that needs more
+-- a calendar of its own, or venues ziplime does not ship -- comes as an extension: it registers
+its venues with :func:`register_venue_calendars`, or advertises them under the
+``ziplime.venue_calendars`` entry point group so that installing it is enough. `zipfinam` does
+this for Moscow: MISX on XMOS, and RTSX on the FORTS calendar it defines.
 """
 
-import datetime
 import os
+from collections.abc import Iterable, Mapping
 from functools import lru_cache
-from zoneinfo import ZoneInfo
 
-import exchange_calendars as xcals
+import structlog
 from exchange_calendars import ExchangeCalendar
-from exchange_calendars.exchange_calendar_xmos import XMOSExchangeCalendar
 
 from ziplime.utils.calendar_utils import get_calendar
 
-
-class FORTSExchangeCalendar(XMOSExchangeCalendar):
-    """Moscow Exchange's derivatives market, which `exchange_calendars` does not carry.
-
-    FORTS trades 09:00-23:50 Moscow, against the 10:00-18:45 of XMOS -- the equity session that
-    `exchange_calendars` does ship. Clocking a futures run on XMOS therefore hides the evening
-    session, which for a cross-market spread is the half that matters: 19:00-23:50 Moscow is
-    where the overlap with the American session lives.
-
-    Holidays, weekmasks and the rest are XMOS's, because the derivatives market observes the same
-    Russian calendar. Only the hours differ, so only the hours are restated.
-
-    The 18:50-19:05 clearing break is modelled; the five-minute 14:00-14:05 one is not, because
-    `exchange_calendars` carries a single break per session and the evening one is the break that
-    separates two sessions traders treat as separate.
-    """
-
-    name = "FORTS"
-
-    tz = ZoneInfo("Europe/Moscow")
-
-    open_times = ((None, datetime.time(9)),)
-    break_start_times = ((None, datetime.time(18, 50)),)
-    break_end_times = ((None, datetime.time(19, 5)),)
-    close_times = ((None, datetime.time(23, 50)),)
-
-
-def _register_extra_calendars() -> None:
-    """Make the calendars this module defines resolvable by name, everywhere.
-
-    Every calendar in ziplime is looked up by string through
-    :func:`ziplime.utils.calendar_utils.get_calendar`, so registering the type is all it takes for
-    a bundle build, a backtest and a live run to agree on what `FORTS` means.
-    """
-    try:
-        xcals.register_calendar_type(FORTSExchangeCalendar.name, FORTSExchangeCalendar)
-    except ValueError:
-        # Already registered: this module is imported from several entry points.
-        pass
-
-
-_register_extra_calendars()
+_logger = structlog.get_logger(__name__)
 
 
 #: The calendar each venue keeps, by MIC.
@@ -97,9 +60,7 @@ VENUE_CALENDARS: dict[str, str] = {
     "XCEC": "CMES",
     "XCME": "CMES",
     "XNYM": "NYMEX",
-    # Moscow: equities on the exchange calendar, derivatives on the one defined above.
-    "MISX": "XMOS",
-    "RTSX": "FORTS",
+    # Moscow is not here: zipfinam registers MISX (XMOS) and RTSX (its FORTS calendar).
     # ICE.
     "IFEU": "IEPA",
     "IFLL": "IEPA",
@@ -118,8 +79,18 @@ VENUE_CALENDARS: dict[str, str] = {
 #: A venue added here needs no new wheel, which is the point: the table above ships inside
 #: ziplime, and getting a one-line change into a running container means rebuilding the core,
 #: the deps image and the service image. A new exchange -- and new crypto venues appear
-#: constantly -- should not cost that. Entries here win over the table.
+#: constantly -- should not cost that. Entries here win over the table and over extensions.
 VENUE_CALENDARS_ENV = "ZIPLIME_VENUE_CALENDARS"
+
+#: Entry point group an extension advertises its venues under. Each entry point is loaded once,
+#: on the first lookup, and must be a ``{MIC: calendar name}`` mapping or a callable returning
+#: one. Loading it is also where an extension registers a calendar type `exchange_calendars` does
+#: not ship, so that the name it maps to can be resolved.
+ENTRY_POINT_GROUP = "ziplime.venue_calendars"
+
+#: Venues registered by extensions, laid over :data:`VENUE_CALENDARS`.
+_extension_venues: dict[str, str] = {}
+_entry_points_loaded = False
 
 #: What a run spanning venues that keep different *weekday* hours is clocked on.
 #:
@@ -148,6 +119,63 @@ MIXED_VENUE_CLOCK = "24/5"
 CONTINUOUS_CLOCK = "24/7"
 
 
+def register_venue_calendars(venues: Mapping[str, str]) -> None:
+    """Add venues to the table, or change the calendar of ones it has.
+
+    For extensions that cover a market ziplime does not: ``{"MISX": "XMOS", "RTSX": "FORTS"}``.
+    A calendar the mapping names that `exchange_calendars` does not ship must be registered with
+    it (``exchange_calendars.register_calendar_type``) before a run looks the venue up; until it
+    is, the venue resolves to no calendar and is judged by the simulation's, as before.
+
+    Registered venues win over the shipped table; the environment override still wins over them.
+    """
+    for mic, calendar in venues.items():
+        mic, calendar = str(mic or "").strip().upper(), str(calendar or "").strip()
+        if mic and calendar:
+            _extension_venues[mic] = calendar
+    _clear_caches()
+
+
+def unregister_venue_calendars(mics: Iterable[str]) -> None:
+    """Take back venues :func:`register_venue_calendars` added. Unknown ones are ignored."""
+    for mic in mics:
+        _extension_venues.pop(str(mic or "").strip().upper(), None)
+    _clear_caches()
+
+
+def _clear_caches() -> None:
+    _venue_table.cache_clear()
+    _calendar_name.cache_clear()
+    _calendar.cache_clear()
+
+
+def _load_extensions() -> None:
+    """Register what installed extensions advertise under :data:`ENTRY_POINT_GROUP`, once.
+
+    A broken extension is logged and skipped: a venue it would have mapped falls back to the
+    simulation calendar, which is wrong-but-working, while raising would take down runs that
+    never touch it.
+    """
+    global _entry_points_loaded
+    if _entry_points_loaded:
+        return
+    _entry_points_loaded = True
+    try:
+        from importlib.metadata import entry_points
+        advertised = list(entry_points(group=ENTRY_POINT_GROUP))
+    except Exception as error:  # importlib.metadata problems must not break ziplime
+        _logger.debug("Could not read venue calendar entry points", error=str(error))
+        return
+    for entry_point in advertised:
+        try:
+            provided = entry_point.load()
+            venues = provided() if callable(provided) else provided
+            register_venue_calendars(dict(venues))
+        except Exception as error:
+            _logger.warning("Venue calendar extension failed to load",
+                            entry_point=entry_point.name, error=str(error))
+
+
 def _overrides() -> str:
     """The raw override string, read per call so a deployment can change it without a restart."""
     return os.environ.get(VENUE_CALENDARS_ENV, "").strip()
@@ -155,13 +183,15 @@ def _overrides() -> str:
 
 @lru_cache(maxsize=None)
 def _venue_table(overrides: str) -> dict[str, str]:
-    """:data:`VENUE_CALENDARS` with the environment's entries laid over it.
+    """:data:`VENUE_CALENDARS`, then the extensions' venues, then the environment's entries.
 
     Cached on the override string rather than on nothing, so changing the environment changes the
     answer -- which is what makes the override worth having, and what a plain `lru_cache` on the
-    lookup would have quietly prevented.
+    lookup would have quietly prevented. Registering venues clears the cache.
     """
+    _load_extensions()
     table = dict(VENUE_CALENDARS)
+    table.update(_extension_venues)
     for entry in overrides.split(","):
         mic, separator, calendar = entry.partition("=")
         if not separator:
@@ -232,11 +262,11 @@ def trades_every_day(calendar_name: str) -> bool:
 def covers(wide: str, narrow: str) -> bool:
     """Whether every minute ``narrow`` trades is a minute ``wide`` trades too.
 
-    Moscow's equity and derivatives calendars are the case this exists for: FORTS runs
-    09:00-23:50 and XMOS 10:00-18:45, same zone, same holidays, one inside the other. A strategy
-    holding both a Moscow share and a Moscow future has no reason to be clocked on `24/5` -- FORTS
-    already visits every minute either of them trades, and `24/5` would add fifteen hours of
-    nothing to every session.
+    Moscow's equity and derivatives calendars are the case this exists for: FORTS (registered by
+    zipfinam) runs 09:00-23:50 and XMOS 10:00-18:45, same zone, same holidays, one inside the other.
+    A strategy holding both a Moscow share and a Moscow future has no reason to be clocked on `24/5`
+    -- FORTS already visits every minute either of them trades, and `24/5` would add fifteen hours
+    of nothing to every session.
 
     Measured rather than declared: same zone, same session days, and on every session sampled the
     wider one opens no later and closes no earlier. A sample is enough because these are fixed

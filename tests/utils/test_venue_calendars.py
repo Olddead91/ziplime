@@ -6,14 +6,22 @@ the order died in `_calculate_order_value_amount` with a message about delisting
 it, because a daily bar sits at the Moscow close, which is the middle of the American session.
 
 The strategies this was fixed for are cross-market spreads, where most bars have one leg shut.
+
+ziplime ships no Moscow venue: zipfinam registers MISX and RTSX through the extension point. These
+tests register them the same way, RTSX on a stand-in for zipfinam's FORTS calendar, so what they
+cover is the mechanism; the real FORTS calendar is tested in zipfinam.
 """
 
 import datetime
 import os
 import types
 import unittest
+from unittest import mock
+from zoneinfo import ZoneInfo
 
+import exchange_calendars as xcals
 import pandas as pd
+from exchange_calendars.exchange_calendar_xmos import XMOSExchangeCalendar
 
 from ziplime.assets.entities.currency import Currency
 from ziplime.assets.entities.equity import Equity
@@ -22,14 +30,19 @@ from ziplime.assets.entities.exchange_info import ExchangeInfo
 from ziplime.domain.bar_data import BarData
 from ziplime.finance.asset_restrictions import NoRestrictions
 from ziplime.utils.calendar_utils import get_calendar
+from ziplime.utils import venue_calendars
 from ziplime.utils.venue_calendars import (
     CONTINUOUS_CLOCK,
+    ENTRY_POINT_GROUP,
     MIXED_VENUE_CLOCK,
     VENUE_CALENDARS_ENV,
     calendar_for_mic,
     calendar_name_for_mic,
     clock_calendar_name,
+    covers,
+    register_venue_calendars,
     trades_every_day,
+    unregister_venue_calendars,
 )
 
 FAR_PAST = datetime.date(1990, 1, 1)
@@ -55,40 +68,39 @@ def moscow(hour: int, minute: int = 0) -> datetime.datetime:
                         tz="Europe/Moscow").to_pydatetime()
 
 
-class FORTSCalendarTests(unittest.TestCase):
-    """The Moscow derivatives session, which `exchange_calendars` does not ship."""
+class EveningMoscowCalendar(XMOSExchangeCalendar):
+    """A stand-in for zipfinam's FORTS: XMOS's holidays, 09:00-23:50 Moscow with a clearing break."""
+
+    name = "TEST_EVENING_MOSCOW"
+    tz = ZoneInfo("Europe/Moscow")
+    open_times = ((None, datetime.time(9)),)
+    break_start_times = ((None, datetime.time(18, 50)),)
+    break_end_times = ((None, datetime.time(19, 5)),)
+    close_times = ((None, datetime.time(23, 50)),)
+
+
+try:
+    xcals.register_calendar_type(EveningMoscowCalendar.name, EveningMoscowCalendar)
+except ValueError:
+    pass
+
+#: What an extension for Moscow registers -- zipfinam's mapping, with the stand-in for FORTS.
+MOSCOW_VENUES = {"MISX": "XMOS", "RTSX": EveningMoscowCalendar.name}
+
+
+class WithMoscow(unittest.TestCase):
+    """Moscow registered for the duration of each test, as an extension would register it."""
 
     def setUp(self):
-        self.calendar = get_calendar("FORTS")
-
-    def test_the_evening_session_is_inside_it(self):
-        """19:00-23:50 Moscow is where the overlap with the American session lives."""
-        self.assertTrue(self.calendar.is_open_on_minute(moscow(21)))
-
-    def test_it_opens_an_hour_before_the_equity_market(self):
-        self.assertTrue(self.calendar.is_open_on_minute(moscow(9, 30)))
-        self.assertFalse(get_calendar("XMOS").is_open_on_minute(moscow(9, 30)))
-
-    def test_the_clearing_break_is_closed(self):
-        self.assertFalse(self.calendar.is_open_on_minute(moscow(18, 55)))
-
-    def test_it_keeps_the_russian_holidays(self):
-        """Inherited from XMOS rather than restated, so the two cannot drift apart."""
-        self.assertFalse(self.calendar.is_session(pd.Timestamp("2025-05-09")))
-        self.assertTrue(self.calendar.is_session(pd.Timestamp("2025-11-27")),
-                        "Thanksgiving is an ordinary Moscow session")
-
-    def test_it_is_longer_than_the_equity_session(self):
-        session = pd.Timestamp(SESSION)
-        self.assertGreater(len(self.calendar.session_minutes(session)),
-                           len(get_calendar("XMOS").session_minutes(session)))
+        register_venue_calendars(MOSCOW_VENUES)
+        self.addCleanup(unregister_venue_calendars, MOSCOW_VENUES)
 
 
-class VenueLookupTests(unittest.TestCase):
+class VenueLookupTests(WithMoscow):
 
-    def test_moscow_equities_and_derivatives_keep_different_hours(self):
+    def test_registered_moscow_venues_keep_different_hours(self):
         self.assertEqual(calendar_name_for_mic("MISX"), "XMOS")
-        self.assertEqual(calendar_name_for_mic("RTSX"), "FORTS")
+        self.assertEqual(calendar_name_for_mic("RTSX"), EveningMoscowCalendar.name)
 
     def test_every_american_equity_venue_keeps_the_nyse_session(self):
         for mic in ("ARCX", "BATS", "XASE", "XNCM", "XNGS", "XNMS", "XNYS"):
@@ -105,7 +117,7 @@ class VenueLookupTests(unittest.TestCase):
         self.assertIsNone(listing("X", "ZZZZ").trading_calendar)
 
 
-class ClockSelectionTests(unittest.TestCase):
+class ClockSelectionTests(WithMoscow):
     """What a run is clocked on, given where its instruments list."""
 
     def test_one_market_keeps_its_own_calendar(self):
@@ -127,7 +139,7 @@ class ClockSelectionTests(unittest.TestCase):
         self.assertIsNone(clock_calendar_name(["ZZZZ"]))
 
 
-class CryptoVenueTests(unittest.TestCase):
+class CryptoVenueTests(WithMoscow):
     """Venues that never close, which a weekday clock cannot hold at all."""
 
     #: A Saturday, and a Sunday two days later.
@@ -146,7 +158,7 @@ class CryptoVenueTests(unittest.TestCase):
     def test_a_seven_day_week_is_read_off_the_calendar_rather_than_listed_here(self):
         """So a venue added through the environment is classified without this module knowing."""
         self.assertTrue(trades_every_day(CONTINUOUS_CLOCK))
-        for name in (MIXED_VENUE_CLOCK, "XNYS", "XMOS", "FORTS"):
+        for name in (MIXED_VENUE_CLOCK, "XNYS", "XMOS", EveningMoscowCalendar.name):
             self.assertFalse(trades_every_day(name), name)
 
     def test_crypto_alone_keeps_the_continuous_clock(self):
@@ -181,10 +193,11 @@ class CryptoVenueTests(unittest.TestCase):
             listing("BTCUSDT", "_BNCC"), night, CONTINUOUS_CLOCK, datetime.timedelta(hours=1)))
 
 
-class VenueOverrideTests(unittest.TestCase):
+class VenueOverrideTests(WithMoscow):
     """A new venue can be added without rebuilding the core, which crypto makes routine."""
 
     def setUp(self):
+        super().setUp()
         self.addCleanup(os.environ.pop, VENUE_CALENDARS_ENV, None)
 
     def set_override(self, value: str):
@@ -202,6 +215,10 @@ class VenueOverrideTests(unittest.TestCase):
         self.assertEqual(calendar_name_for_mic("XHKG"), "XHKG")
 
     def test_an_override_wins_over_the_shipped_table(self):
+        self.set_override("ARCX=24/7")
+        self.assertEqual(calendar_name_for_mic("ARCX"), CONTINUOUS_CLOCK)
+
+    def test_an_override_wins_over_an_extension(self):
         self.set_override("MISX=24/7")
         self.assertEqual(calendar_name_for_mic("MISX"), CONTINUOUS_CLOCK)
 
@@ -218,7 +235,7 @@ class VenueOverrideTests(unittest.TestCase):
         self.assertIsNone(calendar_for_mic("XXXX"), "an unresolvable name behaves as unknown")
 
 
-class CanTradeAcrossVenuesTests(unittest.TestCase):
+class CanTradeAcrossVenuesTests(WithMoscow):
     """`can_trade` asks the listing's venue, not the simulation's calendar."""
 
     @staticmethod
@@ -259,7 +276,7 @@ class CanTradeAcrossVenuesTests(unittest.TestCase):
         self.assertFalse(self.can_trade(moscow_equity, moscow(21), MIXED_VENUE_CLOCK, hourly))
 
     def test_a_futures_listing_on_a_mixed_clock_trades_into_the_evening(self):
-        """Which is the whole reason FORTS exists here: XMOS would have said no at 21:00."""
+        """Which is the whole reason FORTS exists: XMOS would have said no at 21:00."""
         self.assertTrue(self.can_trade(listing("NGZ6", "RTSX"), moscow(21), MIXED_VENUE_CLOCK,
                                        datetime.timedelta(hours=1)))
 
@@ -269,29 +286,87 @@ class CanTradeAcrossVenuesTests(unittest.TestCase):
                                        datetime.timedelta(hours=1)))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-class ContainedCalendarTests(unittest.TestCase):
+class ContainedCalendarTests(WithMoscow):
     """A venue whose hours already hold the others' does not need a 24-hour clock."""
 
-    def test_the_moscow_derivatives_session_contains_the_equity_one(self):
-        from ziplime.utils.venue_calendars import covers
-
-        self.assertTrue(covers("FORTS", "XMOS"))
-        self.assertFalse(covers("XMOS", "FORTS"), "the narrow one does not contain the wide one")
+    def test_the_evening_session_contains_the_equity_one(self):
+        self.assertTrue(covers(EveningMoscowCalendar.name, "XMOS"))
+        self.assertFalse(covers("XMOS", EveningMoscowCalendar.name),
+                         "the narrow one does not contain the wide one")
 
     def test_containment_needs_the_same_zone(self):
         """Otherwise 24/7 would swallow everything and the zones would not line up."""
-        from ziplime.utils.venue_calendars import covers
-
         self.assertFalse(covers(CONTINUOUS_CLOCK, "XNYS"))
         self.assertFalse(covers(MIXED_VENUE_CLOCK, "XMOS"))
 
-    def test_moscow_shares_beside_moscow_futures_are_clocked_on_forts(self):
-        self.assertEqual(clock_calendar_name(["MISX", "RTSX"]), "FORTS")
+    def test_moscow_shares_beside_moscow_futures_are_clocked_on_the_wider_session(self):
+        self.assertEqual(clock_calendar_name(["MISX", "RTSX"]), EveningMoscowCalendar.name)
 
     def test_venues_that_genuinely_miss_each_other_still_need_the_wide_clock(self):
         self.assertEqual(clock_calendar_name(["MISX", "ARCX"]), MIXED_VENUE_CLOCK)
         self.assertEqual(clock_calendar_name(["RTSX", "XNYM"]), MIXED_VENUE_CLOCK)
+
+
+class ExtensionTests(unittest.TestCase):
+    """How a market ziplime does not ship gets its venues in."""
+
+    def tearDown(self):
+        unregister_venue_calendars(["MISX", "RTSX", "ARCX", "XHKG"])
+
+    def test_moscow_is_not_shipped_with_the_core(self):
+        self.assertIsNone(calendar_name_for_mic("MISX"))
+        self.assertIsNone(calendar_name_for_mic("RTSX"))
+
+    def test_a_registered_venue_is_looked_up_and_can_be_taken_back(self):
+        register_venue_calendars({"misx ": "XMOS"})
+        self.assertEqual(calendar_for_mic("MISX").name, "XMOS")
+        self.assertEqual(listing("SBER", "MISX").trading_calendar.name, "XMOS")
+        unregister_venue_calendars(["MISX"])
+        self.assertIsNone(calendar_for_mic("MISX"), "the cached answer must not survive")
+
+    def test_an_extension_wins_over_the_shipped_table(self):
+        register_venue_calendars({"ARCX": CONTINUOUS_CLOCK})
+        self.assertEqual(calendar_name_for_mic("ARCX"), CONTINUOUS_CLOCK)
+        unregister_venue_calendars(["ARCX"])
+        self.assertEqual(calendar_name_for_mic("ARCX"), "XNYS")
+
+    def test_an_unresolvable_calendar_behaves_as_an_unknown_venue(self):
+        register_venue_calendars({"XHKG": "NoSuchCalendar"})
+        self.assertEqual(calendar_name_for_mic("XHKG"), "NoSuchCalendar")
+        self.assertIsNone(calendar_for_mic("XHKG"))
+
+    def _with_entry_points(self, *advertised):
+        """Pretend these entry points are installed, and make the module read them afresh."""
+        patcher = mock.patch("importlib.metadata.entry_points",
+                             lambda group: [ep for ep in advertised if group == ENTRY_POINT_GROUP])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(setattr, venue_calendars, "_entry_points_loaded", True)
+        venue_calendars._entry_points_loaded = False
+        venue_calendars._clear_caches()
+
+    @staticmethod
+    def _entry_point(name, provided):
+        return types.SimpleNamespace(name=name, load=lambda: provided)
+
+    def test_an_installed_extension_is_picked_up_without_being_imported(self):
+        """Installing zipfinam is all a deployment does; nothing in the service imports it."""
+        self._with_entry_points(self._entry_point("moscow", lambda: MOSCOW_VENUES))
+        self.assertEqual(calendar_name_for_mic("RTSX"), EveningMoscowCalendar.name)
+
+    def test_an_extension_may_advertise_a_plain_mapping(self):
+        self._with_entry_points(self._entry_point("moscow", {"MISX": "XMOS"}))
+        self.assertEqual(calendar_name_for_mic("MISX"), "XMOS")
+
+    def test_a_broken_extension_is_skipped_rather_than_fatal(self):
+        def broken():
+            raise RuntimeError("extension failed to import")
+
+        self._with_entry_points(types.SimpleNamespace(name="broken", load=broken),
+                                self._entry_point("moscow", {"MISX": "XMOS"}))
+        self.assertEqual(calendar_name_for_mic("MISX"), "XMOS")
+        self.assertEqual(calendar_name_for_mic("ARCX"), "XNYS")
+
+
+if __name__ == "__main__":
+    unittest.main()

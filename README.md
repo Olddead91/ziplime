@@ -269,7 +269,7 @@ asyncio.run(main())
 
 </details>
 
-Optional features install as extras: `ziplime[mcp]` (local MCP server), `ziplime[huggingface]` (`hf://` point-in-time datasets), `ziplime[algopack]` (`algopack://` MOEX AlgoPack tables), `ziplime[options]` (option pricing), `ziplime[numba]` (compiled vector kernel), or `ziplime[all]`.
+Optional features install as extras: `ziplime[mcp]` (local MCP server), `ziplime[huggingface]` (`hf://` point-in-time datasets), `ziplime[options]` (option pricing), `ziplime[numba]` (compiled vector kernel), or `ziplime[all]`.
 
 Coming from Zipline? Most algorithms port by adding `async`/`await`. See the [migration guide](https://limex-com.github.io/ziplime/). <!-- TODO: write the migration guide page; this is the #1 question from zipline-reloaded users -->
 
