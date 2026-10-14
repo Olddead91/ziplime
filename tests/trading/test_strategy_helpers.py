@@ -12,6 +12,7 @@ import datetime
 import types
 import unittest
 
+import pandas as pd
 import polars as pl
 
 from ziplime.assets.entities.futures_contract import FuturesContract
@@ -85,7 +86,8 @@ class RebalanceTests(unittest.IsolatedAsyncioTestCase):
     """`context.rebalance` holds what it was given and closes everything else."""
 
     @staticmethod
-    def _algorithm(held, futures=False, price=100.0, portfolio_value=1_000_000.0):
+    def _algorithm(held, futures=False, price=100.0, portfolio_value=1_000_000.0, shut=()):
+        """``shut`` names listings whose venue is closed at this bar, as `can_trade` reports it."""
         ordered = {}
         amounts = {}
 
@@ -101,15 +103,20 @@ class RebalanceTests(unittest.IsolatedAsyncioTestCase):
         async def current(assets, fields):
             return pl.DataFrame({"sid": [a.sid for a in assets], "price": [price] * len(assets)})
 
+        def can_trade(assets):
+            return pd.Series({asset: asset not in set(shut) for asset in assets}, dtype=bool)
+
         positions = {(None, None, asset): types.SimpleNamespace(asset=asset, amount=amount)
                      for asset, amount in held.items()}
         stub = types.SimpleNamespace(
             portfolio=types.SimpleNamespace(
                 positions=positions, portfolio_value=portfolio_value,
                 get_asset_positions_amount=get_asset_positions_amount),
-            current_data=types.SimpleNamespace(current=current),
+            current_data=types.SimpleNamespace(current=current, can_trade=can_trade),
             contracts_for_notional=lambda asset, notional, price: int(notional / price),
             order=order,
+            simulation_dt=None,
+            _logger=types.SimpleNamespace(debug=lambda *a, **k: None),
             order_target_percent=order_target_percent)
         return stub, ordered, amounts
 
@@ -158,6 +165,26 @@ class RebalanceTests(unittest.IsolatedAsyncioTestCase):
         await TradingAlgorithm.rebalance(stub, {contract: 0.5})
 
         self.assertEqual((ordered, amounts), ({}, {}))
+
+    async def test_a_leg_whose_venue_is_shut_is_left_alone(self):
+        """The bar a cross-market spread spends most of its life on."""
+        moscow, american = Listing(1, "NGZ6", mic="RTSX"), Listing(2, "NGZ6", mic="XNYM")
+        stub, ordered, amounts = self._algorithm({}, shut=[american])
+
+        await TradingAlgorithm.rebalance(stub, {moscow: 0.5, american: -0.5})
+
+        self.assertEqual(ordered, {moscow: 0.5})
+        self.assertEqual(amounts, {}, "nothing is sent to a market that is not trading")
+
+    async def test_a_holding_on_a_shut_venue_is_not_closed_for_being_unnamed(self):
+        """Closing it is impossible, and closing only the other leg would unhedge the book."""
+        moscow, american = Listing(1, "NGZ6", mic="RTSX"), Listing(2, "NGZ6", mic="XNYM")
+        stub, ordered, amounts = self._algorithm({moscow: 10, american: -10}, shut=[american])
+
+        await TradingAlgorithm.rebalance(stub, {})
+
+        self.assertEqual(ordered, {})
+        self.assertEqual(amounts, {moscow: -10}, "the open leg closes, the shut one waits")
 
 
 class PeriodStartTests(unittest.TestCase):

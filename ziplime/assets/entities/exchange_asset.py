@@ -27,3 +27,20 @@ class ExchangeAsset:
     @property
     def mic(self) -> str:
         return self.exchange.mic
+
+    @property
+    def trading_calendar(self):
+        """The schedule this listing's own venue keeps, or ``None`` if the venue is not known.
+
+        A listing carries its venue but not that venue's hours, which is why everything used to
+        judge it by the simulation's calendar instead -- correct while a run stays on one market,
+        and wrong the moment it does not: on a Moscow clock an American listing is asked for a
+        price at 10:01 Moscow, which is 03:01 in New York.
+
+        ``None`` means the venue is not in :data:`~ziplime.utils.venue_calendars.VENUE_CALENDARS`,
+        and every caller falls back to the simulation calendar for it -- the behaviour that
+        predates this property.
+        """
+        from ziplime.utils.venue_calendars import calendar_for_mic
+
+        return calendar_for_mic(self.mic)

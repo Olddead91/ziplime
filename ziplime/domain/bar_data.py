@@ -59,7 +59,8 @@ class BarData:
                  simulation_dt_func: Callable,
                  trading_calendar: ExchangeCalendar,
                  restrictions,
-                 data_source_resolver: Callable[[str], Awaitable[DataSource]] | None = None):
+                 data_source_resolver: Callable[[str], Awaitable[DataSource]] | None = None,
+                 emission_rate: datetime.timedelta | None = None):
         # self.data_bundle = data_bundle
         self.simulation_dt_func = simulation_dt_func
 
@@ -68,6 +69,13 @@ class BarData:
         self._adjust_minutes = False
 
         self._trading_calendar = trading_calendar
+        #: What a bar covers, which decides how finely a venue's hours can be asked about. A
+        #: session-level run puts its one bar at the simulation calendar's close, a minute that
+        #: means nothing to any other venue -- 18:45 Moscow is lunchtime in New York and 00:00 UTC
+        #: on a 24/5 clock is the middle of the night everywhere -- so on a daily run a venue is
+        #: asked only whether it traded that *day*. ``None`` means unknown and is treated as
+        #: session-level, which is the safer of the two.
+        self._emission_rate = emission_rate
         self._is_restricted = restrictions.is_restricted
         self.data_sources = data_sources
         self.default_data_source = data_sources[list(data_sources.keys())[0]]
@@ -407,12 +415,52 @@ class BarData:
         if self.has_stopped_trading(asset=asset, session=session):
             return False
 
-        # The simulation's calendar, not the listing's own: a listing carries its venue but not
-        # that venue's schedule, and `can_trade` documents the simulation calendar as the answer
-        # when the asset's own is unavailable.
-        if self._trading_calendar.is_open_on_minute(minute=dt):
+        return self._venue_is_open(asset=asset, dt=dt, session=session, session_label=session_label)
+
+    def _venue_is_open(self, asset: ExchangeAsset, dt: datetime.datetime,
+                       session: datetime.date, session_label) -> bool:
+        """Whether the listing's own market is trading at this point in the simulation.
+
+        The listing's calendar, not the simulation's. The two agree while a run stays on one
+        market and part ways the moment it does not: on a Moscow clock, 10:01 Moscow is a market
+        minute and 03:01 in New York, so judging an American listing by the simulation's calendar
+        calls it tradeable in the middle of the American night -- and the order then fails in
+        `_calculate_order_value_amount`, where there is no price, with a message about delisting.
+
+        How finely the question is asked depends on what a bar covers. A session-level run places
+        its single bar at the simulation calendar's close, which is an arbitrary minute for
+        anywhere else, so a daily run asks only whether the venue traded that day. An intraday run
+        asks about the minute, which is the whole point.
+
+        A venue this build has no calendar for falls back to the simulation's, which is what every
+        caller did before listings carried their own.
+        """
+        calendar = asset.trading_calendar if isinstance(asset, ExchangeAsset) else None
+        if calendar is None:
+            calendar = self._trading_calendar
+
+        session_level = (self._emission_rate is None
+                         or self._emission_rate >= datetime.timedelta(days=1))
+        if session_level:
+            # Did this venue trade on the simulation's session *day*? Asked of the day and not of
+            # the minute, and not through `minute_to_session` either: that answers with the next
+            # session the venue has, so a venue shut for its own holiday would report the session
+            # after it and look open. The simulation's session day is the common ground here --
+            # both calendars label a day the same way, whatever hours they keep inside it.
+            try:
+                return bool(calendar.is_session(pd.Timestamp(session)))
+            except (ValueError, KeyError):
+                # Outside the venue calendar's range entirely.
+                return False
+
+        if calendar.is_open_on_minute(minute=dt):
             return True
-        return self._trading_calendar.is_session(session_label)
+        # Not a trading minute for this venue. A simulation calendar that is its own venue's
+        # calendar keeps the old answer -- a session it knows is tradeable even between minutes --
+        # so a single-market run behaves exactly as it did.
+        if calendar is self._trading_calendar:
+            return calendar.is_session(session_label)
+        return False
 
     async def history(self, assets: list[Asset], bar_count: int | None = None,
                       frequency: datetime.timedelta | Period = datetime.timedelta(days=1),

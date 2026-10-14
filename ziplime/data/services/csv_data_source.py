@@ -72,3 +72,4 @@ class CSVDataSource(DataSource):
         self.data = df
         self.start_date = self.data["date"].min()
         self.end_date = self.data["date"].max()
+        return self.data

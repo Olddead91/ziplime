@@ -1,15 +1,37 @@
 import datetime
+from zoneinfo import ZoneInfo
 
 import asyncclick as click
 
 
+def _coerce_tz(tz):
+    if tz is None or isinstance(tz, datetime.tzinfo):
+        return tz
+    if isinstance(tz, str):
+        return ZoneInfo(tz)
+    return tz
+
+
 class _DatetimeParam(click.ParamType):
     def __init__(self, tz=None):
-        self.tz = tz
+        self.tz = _coerce_tz(tz)
 
     def parser(self, value):
-        return value
-        return datetime.datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=self.tz)
+        if isinstance(value, datetime.datetime):
+            dt = value
+        elif isinstance(value, datetime.date):
+            dt = datetime.datetime(value.year, value.month, value.day)
+        elif isinstance(value, str):
+            dt = datetime.datetime.fromisoformat(value)
+        else:
+            raise TypeError(f"Cannot parse {type(value)} into datetime")
+
+        if self.tz is not None:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=self.tz)
+            else:
+                dt = dt.astimezone(self.tz)
+        return dt
 
     @property
     def name(self):
@@ -18,7 +40,7 @@ class _DatetimeParam(click.ParamType):
     def convert(self, value, param, ctx):
         try:
             return self.parser(value)
-        except ValueError:
+        except (ValueError, TypeError):
             self.fail(
                 "%s is not a valid %s" % (value, self.name.lower()),
                 param,
@@ -27,13 +49,13 @@ class _DatetimeParam(click.ParamType):
 
 
 class Timestamp(_DatetimeParam):
-    """A click parameter that parses the value into pandas.Timestamp objects.
+    """A click parameter that parses the value into datetime.datetime objects.
 
     Parameters
     ----------
     tz : timezone-coercable, optional
         The timezone to parse the string as.
-        By default the timezone will be infered from the string or naiive.
+        By default the timezone will be inferred from the string or naive.
     """
 
 
@@ -44,9 +66,9 @@ class Date(_DatetimeParam):
     ----------
     tz : timezone-coercable, optional
         The timezone to parse the string as.
-        By default the timezone will be infered from the string or naiive.
+        By default the timezone will be inferred from the string or naive.
     as_timestamp : bool, optional
-        If True, return the value as a pd.Timestamp object normalized to
+        If True, return the value as a datetime.datetime object normalized to
         midnight.
     """
 
@@ -56,4 +78,4 @@ class Date(_DatetimeParam):
 
     def parser(self, value):
         ts = super(Date, self).parser(value)
-        return ts.normalize() if self.as_timestamp else ts.date()
+        return ts.replace(hour=0, minute=0, second=0, microsecond=0) if self.as_timestamp else ts.date()

@@ -290,8 +290,10 @@ class BundleService:
         # repair data
         all_bars = [
             s for s in pl.from_pandas(
-                trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None),
-                                                  end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
+                trading_calendar.sessions_minutes(
+                    start=date_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
+                    end=date_end.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
+                ).tz_convert(trading_calendar.tz)
             ) if s >= date_start and s <= date_end
         ]
 
@@ -465,8 +467,10 @@ class BundleService:
         # repair data
         all_bars = [
             s for s in pl.from_pandas(
-                trading_calendar.sessions_minutes(start=date_start.replace(tzinfo=None),
-                                                  end=date_end.replace(tzinfo=None)).tz_convert(trading_calendar.tz)
+                trading_calendar.sessions_minutes(
+                    start=date_start.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
+                    end=date_end.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
+                ).tz_convert(trading_calendar.tz)
             ) if s >= date_start and s <= date_end
         ]
         required_sessions = pl.DataFrame({"date": all_bars, "close": 0.00}).group_by_dynamic(
