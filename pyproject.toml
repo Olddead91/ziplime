@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ziplime"
-version = "2.10.3"
+version = "2.11.0"
 description = ""
 authors = ["Ziplime"]
 readme = "README.md"
@@ -59,13 +59,19 @@ vollib = {version = "^1.0.11", optional = true}
 # the same loop runs interpreted and produces identical numbers, just slower. Measured on 500
 # instruments over five years: 0.055s compiled against 0.312s interpreted.
 numba = {version = "^0.67", optional = true}
+# algopack: MOEX AlgoPack tables (`algopack://market/dataset` mounts) -- see
+# ziplime.data.data_sources.algopack. Transport only: moexalgo supplies the address, the bearer token
+# and the Russian root certificate; ziplime does the paging and the shaping. Without it a mount
+# still resolves and a read says how to install it.
+moexalgo = {version = "^2.5.12", optional = true}
 
 [tool.poetry.extras]
 mcp = ["mcp"]
 huggingface = ["huggingface-hub", "pyyaml"]
 options = ["vollib"]
 numba = ["numba"]
-all = ["mcp", "huggingface-hub", "pyyaml", "vollib", "numba"]
+algopack = ["moexalgo"]
+all = ["mcp", "huggingface-hub", "pyyaml", "vollib", "numba", "moexalgo"]
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = {extras = ["i18n"], version = "^1.6.1"}

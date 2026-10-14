@@ -352,6 +352,7 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             restrictions=self.restrictions,
             data_sources=data_sources,
             data_source_resolver=self._resolve_named_data_source,
+            emission_rate=clock.emission_rate,
         )
 
         # We don't have a datetime for the current snapshot until we
@@ -1183,6 +1184,26 @@ class TradingAlgorithm(BaseTradingAlgorithm):
         for listing in held - set(wanted):
             wanted[listing] = 0.0
 
+        # Whatever venue is shut right now is left exactly as it is -- neither ordered to its
+        # target nor closed for being unnamed. A spread between two markets is asked to rebalance
+        # on every bar of a clock wide enough to hold both, so most bars have one leg shut, and
+        # the alternative is the run dying on the first of them: ordering a listing whose market
+        # is closed reaches `_calculate_order_value_amount`, finds no price and raises.
+        #
+        # Leaving the leg alone is the honest answer rather than a convenience. The weights are a
+        # statement about the book, and a book cannot be moved on a market that is not trading;
+        # closing the *other* leg meanwhile would turn a paused rebalance into an unhedged one.
+        if wanted:
+            open_now = self.current_data.can_trade(list(wanted))
+            shut = [listing for listing in wanted if not bool(open_now.get(listing, True))]
+            if shut:
+                for listing in shut:
+                    del wanted[listing]
+                self._logger.debug(
+                    "rebalance skipped listings whose venue is closed at this bar",
+                    listings=sorted(str(listing) for listing in shut),
+                    dt=self.simulation_dt)
+
         for listing, weight in wanted.items():
             amount = await self.portfolio.get_asset_positions_amount(
                 listing, exchange_name=exchange_name)
@@ -1320,19 +1341,30 @@ class TradingAlgorithm(BaseTradingAlgorithm):
     async def _resolve_named_data_source(self, name: str):
         """Mount a data source a strategy named but never registered.
 
-        Today that means a Hugging Face dataset address. It is resolved here rather than in
-        :class:`~ziplime.domain.bar_data.BarData` because a mount needs the asset database, to
-        turn the dataset's tickers into sids, and the simulation window, to avoid downloading
-        years the run cannot reach -- and this object holds both.
+        Today that means a dataset address: ``hf://owner/name/config`` for a published Hugging
+        Face dataset, or ``algopack://market/dataset`` for a MOEX AlgoPack table. Both are
+        resolved here rather than in :class:`~ziplime.domain.bar_data.BarData` because a mount
+        needs the asset database, to turn the dataset's tickers into sids, and the simulation
+        window, to avoid fetching years the run cannot reach -- and this object holds both.
         """
+        from ziplime.data.data_sources.algopack.algopack_data_source import (
+            AlgoPackDataSource, is_address as is_algopack_address,
+        )
         from ziplime.data.data_sources.huggingface.huggingface_data_source import (
             HuggingFaceDataSource, is_address,
         )
+        if is_algopack_address(name):
+            # No network and no asset lookup: AlgoPack is read per instrument, so a mount knows
+            # nothing until a strategy says which instruments it is asking about.
+            return AlgoPackDataSource.mount(
+                name, start_date=self.clock.start_session, end_date=self.clock.end_session,
+                trading_calendar=self.clock.trading_calendar)
         if not is_address(name):
             raise KeyError(
                 f"No data source named {name!r}. Register it with "
-                f"run_simulation(custom_data_sources=[...]), or name a Hugging Face dataset as "
-                f"hf://owner/name/config.")
+                f"run_simulation(custom_data_sources=[...]), or name a dataset -- a Hugging Face "
+                f"one as hf://owner/name/config, a MOEX AlgoPack table as "
+                f"algopack://market/dataset.")
         return await HuggingFaceDataSource.mount(
             name, asset_service=self.asset_service,
             start_date=self.clock.start_session, end_date=self.clock.end_session,
@@ -1380,6 +1412,48 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             start_date=start_date or self.clock.start_session,
             end_date=end_date or self.clock.end_session,
             fields=fields, name=name,
+            trading_calendar=self.clock.trading_calendar)
+        self.current_data.data_sources[source.name] = source
+        return source
+
+    @api_method
+    async def algopack_dataset(self, dataset: str, market: str = "eq",
+                               granularity: str = "1d",
+                               fields: list[str] | None = None,
+                               start_date: datetime.date | None = None,
+                               end_date: datetime.date | None = None,
+                               name: str | None = None):
+        """Mount a MOEX AlgoPack table.
+
+        The explicit form of ``data.history(data_source="algopack://eq/tradestats")``. Use it when
+        the defaults are not what you want -- above all to mount the **five-minute buckets**
+        rather than the session aggregate::
+
+            context.flow = await context.algopack_dataset("tradestats", granularity="5min")
+
+        Then read it like any other source::
+
+            df = await data.history(assets=[sber], bar_count=12, data_source=context.flow)
+
+        Args:
+            dataset: ``tradestats``, ``orderstats``, ``obstats``, ``hi2``, ``alerts`` or
+                ``futoi``.
+            market: ``eq`` (equities), ``fo`` (futures) or ``fx``.
+            granularity: ``1d`` for one row per Moscow session, aggregated with a rule per
+                column, or ``5min`` for the buckets exactly as the exchange publishes them.
+            fields: Columns to keep besides ``date`` and ``sid``. All of them by default.
+            start_date, end_date: Window to fetch. Defaults to the simulation's own, which is
+                what keeps a long backtest from asking for years it cannot reach.
+            name: What to call the source. Defaults to its address.
+
+        Returns:
+            The mounted source. Nothing is fetched until a read names the instruments to fetch.
+        """
+        from ziplime.data.data_sources.algopack.algopack_data_source import AlgoPackDataSource
+        source = AlgoPackDataSource.mount(
+            f"algopack://{market}/{dataset}", granularity=granularity, fields=fields, name=name,
+            start_date=start_date or self.clock.start_session,
+            end_date=end_date or self.clock.end_session,
             trading_calendar=self.clock.trading_calendar)
         self.current_data.data_sources[source.name] = source
         return source
@@ -1549,16 +1623,9 @@ class TradingAlgorithm(BaseTradingAlgorithm):
                                                              fields=frozenset({"price"}),
                                                              data_frequency=None
                                                              ))["price"]
-            if len(last_price_data) == 0:
-                # if last_price is None:
-                raise CannotOrderDelistedAsset(
-                    msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
-                )
+            if len(last_price_data) == 0 or last_price_data[0] is None:
+                raise CannotOrderDelistedAsset(msg=self._no_price_message(asset=asset))
             last_price = last_price_data[0]
-            if last_price is None:
-                raise CannotOrderDelistedAsset(
-                    msg=f"Cannot order sid={asset.sid} on {self.simulation_dt} as there is no last price for the security."
-                )
         if tolerant_equals(last_price, 0):
             self._logger.debug(f"Price of 0 for {asset}; can't infer value")
             # Don't place any order
@@ -1576,6 +1643,27 @@ class TradingAlgorithm(BaseTradingAlgorithm):
             return value / per_bond
         else:
             return value / last_price
+
+    def _no_price_message(self, asset: ExchangeAsset) -> str:
+        """Why there is no price here, said in terms of the thing that is actually wrong.
+
+        Almost always the listing's market is shut: the simulation is clocked on a calendar wide
+        enough for every venue it touches, so most of its minutes belong to some other market.
+        The old message blamed delisting for this, which sent people looking through reference
+        data for an instrument that trades perfectly well four hours later.
+        """
+        venue_calendar = getattr(asset, "trading_calendar", None)
+        where = f"sid={asset.sid} ({asset})"
+        if venue_calendar is not None and not venue_calendar.is_open_on_minute(
+                minute=self.simulation_dt):
+            return (
+                f"Cannot order {where} at {self.simulation_dt}: {asset.mic} is closed at this "
+                f"point in the simulation, which is clocked on "
+                f"{self.clock.trading_calendar.name}. The venue keeps the {venue_calendar.name} "
+                f"calendar. Gate the order on `data.can_trade`, or let `context.rebalance` do it "
+                f"for you -- it skips a leg whose market is shut.")
+        return (f"Cannot order {where} at {self.simulation_dt}: the market data holds no price "
+                f"for it at or before this bar.")
 
     def _can_order_asset(self, asset: ExchangeAsset):
         day = self.clock.trading_calendar.minute_to_session(self.simulation_dt).date()
